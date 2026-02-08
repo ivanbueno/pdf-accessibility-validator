@@ -200,6 +200,7 @@
 
     resultPanel.innerHTML = headerHtml;
     resultPanel.classList.remove("hidden");
+    animateResultPanel();
 
     const profileGrid = document.getElementById("profile-grid");
     const profileOrder = ["pdfua-1", "wcag-2-2-complete.xml"];
@@ -231,6 +232,12 @@
 
       profileGrid.appendChild(fragment);
     });
+  }
+
+  function animateResultPanel() {
+    resultPanel.classList.remove("result-enter");
+    void resultPanel.offsetHeight;
+    resultPanel.classList.add("result-enter");
   }
 
   function renderBreakdown(fragment, issues) {
