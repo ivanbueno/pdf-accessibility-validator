@@ -3,7 +3,11 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>PDF Accessibility Validator</title>
+    <meta
+      name="description"
+      content="Validate your PDF for PDF/UA-1, WCAG 2.2, and Section 508 compliance online. Free PDF accessibility checker powered by veraPDF. API available."
+    />
+    <title>Free PDF Accessibility Checker | PDF/UA & WCAG Validator Online | PDF Audit</title>
     <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -16,13 +20,13 @@
 
     <main class="page">
       <header class="hero">
-        <p class="eyebrow">veraPDF Online Checker and API</p>
+        <p class="eyebrow">PDF/UA & WCAG Validator Online</p>
         <div class="hero-title">
           <img class="hero-logo" src="./favicon.svg" alt="" aria-hidden="true" />
-          <h1>PDF Audit</h1>
+          <h1>Free PDF Accessibility Checker</h1>
         </div>
         <p class="lead">
-          Validate PDF Accessibility with <strong>PDF/UA-1</strong> and <strong>WCAG 2.2</strong> profiles.
+          Check if your PDF is PDF/UA compliant and WCAG 2.2 accessible. Powered by veraPDF. Instant results via web or API.
         </p>
       </header>
 
@@ -80,7 +84,14 @@
       <section id="error-panel" class="panel error-panel hidden" aria-live="polite"></section>
 
       <details class="panel collapsible-panel instructions-panel" open>
-        <summary class="collapsible-summary">Direct API Calls</summary>
+        <summary class="collapsible-summary">
+          <span class="summary-title">
+            <svg class="section-title-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M4 5h16v2H4zM5 9h2v6H5zm4 0h2v6H9zm4 0h2v6h-2zm4 0h2v6h-2zM4 19h16v-2H4z"/>
+            </svg>
+            <span>PDF Accessibility API</span>
+          </span>
+        </summary>
         <div class="collapsible-content instructions-content">
           <p class="result-meta">
             Endpoint:
@@ -90,7 +101,14 @@
           <div class="instructions-grid">
             <article>
               <div class="instructions-title-row">
-                <h3>POST /validate (base64 upload)</h3>
+                <h3>
+                  <span class="mini-title">
+                    <svg class="mini-title-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                      <path d="M5 19h14v2H5zM12 3l5 5h-3v6h-4V8H7z"/>
+                    </svg>
+                    <span>POST /validate (base64 upload)</span>
+                  </span>
+                </h3>
                 <button
                   type="button"
                   class="copy-icon-btn"
@@ -108,7 +126,14 @@
             </article>
             <article>
               <div class="instructions-title-row">
-                <h3>GET /validate (pdf_url query)</h3>
+                <h3>
+                  <span class="mini-title">
+                    <svg class="mini-title-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                      <path d="M10.6 13.4a2 2 0 0 1 0-2.8l2.8-2.8a2 2 0 1 1 2.8 2.8l-.7.7 1.4 1.4.7-.7a4 4 0 1 0-5.6-5.6L9 9.2a4 4 0 1 0 5.6 5.6l.7-.7-1.4-1.4-.7.7a2 2 0 0 1-2.6 0z"/>
+                    </svg>
+                    <span>GET /validate (pdf_url query)</span>
+                  </span>
+                </h3>
                 <button
                   type="button"
                   class="copy-icon-btn"
@@ -125,32 +150,162 @@
               <pre id="get-example"></pre>
             </article>
           </div>
+
+          <footer class="api-footer" aria-label="API overview">
+            <h3 class="api-footer-title">
+              <svg class="api-footer-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M19.43 12.98c.04-.32.07-.65.07-.98s-.03-.66-.08-.98l2.11-1.65a.5.5 0 0 0 .12-.64l-2-3.46a.5.5 0 0 0-.6-.22l-2.49 1a7.03 7.03 0 0 0-1.69-.98l-.38-2.65A.5.5 0 0 0 14 1h-4a.5.5 0 0 0-.49.42l-.38 2.65c-.61.25-1.17.57-1.69.98l-2.49-1a.5.5 0 0 0-.6.22l-2 3.46a.5.5 0 0 0 .12.64l2.11 1.65c-.05.32-.08.65-.08.98s.03.66.08.98L2.47 14.63a.5.5 0 0 0-.12.64l2 3.46a.5.5 0 0 0 .6.22l2.49-1c.52.41 1.08.73 1.69.98l.38 2.65a.5.5 0 0 0 .49.42h4a.5.5 0 0 0 .49-.42l.38-2.65c.61-.25 1.17-.57 1.69-.98l2.49 1a.5.5 0 0 0 .6-.22l2-3.46a.5.5 0 0 0-.12-.64l-2.11-1.65ZM12 15.5A3.5 3.5 0 1 1 12 8.5a3.5 3.5 0 0 1 0 7Z"/>
+              </svg>
+              <span>Automate PDF compliance testing in your workflow.</span>
+            </h3>
+            <p>Designed for cloud-native deployment, our API allows you to:</p>
+            <ul>
+              <li>Validate base64-encoded PDFs</li>
+              <li>Validate public PDF URLs</li>
+              <li>Retrieve structured validation results</li>
+              <li>Integrate into CI/CD pipelines</li>
+              <li>Build PDF remediation pipelines</li>
+            </ul>
+          </footer>
         </div>
       </details>
 
-      <details class="panel collapsible-panel why-panel">
-        <summary class="collapsible-summary">Why VeraPDF?</summary>
-        <div class="collapsible-content why-content">
-          <p>
-            VeraPDF is an industry-standard, open-source validator supported by the Open Preservation Foundation and the PDF
-            Association. In <a href="https://pdfix.net/pdf-accessibility-validators/" target="_blank" rel="noopener noreferrer">published validator comparisons</a>, VeraPDF is often the strictest checker. It can surface PDF/UA issues
-            that PAC, Adobe Acrobat, and CommonLook may miss, which is why this API uses VeraPDF as its baseline engine for
-            technical accessibility validation.
+      <section class="info-grid" aria-label="Accessibility compliance information">
+        <section class="panel info-section" aria-labelledby="tool-banner-title">
+          <p class="info-section-kicker">
+            <span class="kicker-title">
+              <svg class="kicker-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M19 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2Zm-9 12-3-3 1.4-1.4L10 12.2l5.6-5.6L17 8l-7 7Z"/>
+              </svg>
+              <span>WHAT THIS TOOL DOES</span>
+            </span>
           </p>
-        </div>
-      </details>
+          <h2 id="tool-banner-title">Comprehensive PDF Accessibility Testing</h2>
+          <p>Our online PDF accessibility checker validates your document against:</p>
+          <ul>
+            <li>PDF/UA-1 (ISO 14289)</li>
+            <li>WCAG 2.2 success criteria</li>
+            <li>Section 508 requirements</li>
+            <li>Tagged PDF structure validation</li>
+            <li>Metadata and document language checks</li>
+            <li>Form accessibility testing</li>
+          </ul>
+          <p>Get a detailed validation report showing exactly what passes and what fails.</p>
+        </section>
 
-      <details class="panel collapsible-panel privacy-panel">
-        <summary class="collapsible-summary">Privacy Policy</summary>
-        <div class="collapsible-content privacy-content">
-          <p>
-            No files, URLs, request payloads, or validation results are intentionally stored by this application or API beyond
-            transient processing needed to complete a request.
+        <section class="panel info-section info-section-wide" aria-labelledby="why-accessibility-matters-title">
+          <p class="info-section-kicker">
+            <span class="kicker-title">
+              <svg class="kicker-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M12 2 4 5v6c0 5.2 3.4 10.2 8 11 4.6-.8 8-5.8 8-11V5Zm-1 12-3-3 1.4-1.4L11 11.2l4.6-4.6L17 8l-6 6Z"/>
+              </svg>
+              <span>WHY PDF ACCESSIBILITY MATTERS</span>
+            </span>
           </p>
-          <p>
-            Submitted files are processed by AWS Lambda execution environments using ephemeral storage and are discarded
-            after execution, subject to AWS platform behavior.
-          </p>
+          <div class="info-section-columns">
+            <article class="info-subsection">
+              <h2 id="why-accessibility-matters-title">What Is PDF/UA Compliance?</h2>
+              <p>PDF/UA (ISO 14289) is the international standard for accessible PDF documents. It ensures that:</p>
+              <ul>
+                <li>Screen readers can interpret document structure</li>
+                <li>Headings, lists, and tables are properly tagged</li>
+                <li>Images include alternative text</li>
+                <li>Forms are accessible and usable</li>
+              </ul>
+              <p>Failing PDF/UA validation can lead to accessibility barriers and legal risk.</p>
+            </article>
+
+            <article class="info-subsection" aria-labelledby="wcag-pdf-title">
+              <h2 id="wcag-pdf-title">How WCAG 2.2 Applies to PDFs</h2>
+              <p>WCAG 2.2 requires digital content, including PDFs, to meet accessibility standards such as:</p>
+              <ul>
+                <li>Proper semantic structure</li>
+                <li>Sufficient color contrast</li>
+                <li>Accessible navigation</li>
+                <li>Logical reading order</li>
+                <li>Descriptive link text</li>
+              </ul>
+              <p>Many organizations assume PDFs are compliant when they are not. Our tool helps verify compliance before publishing.</p>
+            </article>
+          </div>
+        </section>
+      </section>
+
+      <details class="panel collapsible-panel instructions-panel faq-panel">
+        <summary class="collapsible-summary">
+          <span class="summary-title">
+            <svg class="section-title-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Zm0 17a1.25 1.25 0 1 1 0-2.5A1.25 1.25 0 0 1 12 19Zm1.3-5.7v.45h-2v-.65c0-1.5 1.1-2.1 1.9-2.6.7-.4 1-.7 1-1.3 0-.8-.6-1.3-1.5-1.3-1 0-1.6.5-2 1.3L9 8.5c.5-1.4 1.8-2.2 3.6-2.2 2 0 3.6 1.2 3.6 3 0 1.4-.8 2.1-1.7 2.7-.7.4-1.2.7-1.2 1.3Z"/>
+            </svg>
+            <span>Frequently Asked Questions</span>
+          </span>
+        </summary>
+        <div class="collapsible-content faq-content">
+          <dl class="faq-list">
+          <div class="faq-item">
+            <dt>Who needs a PDF Accessibility Checker?</dt>
+            <dd>
+              This tool is built for:
+              <ul>
+                <li>Government agencies (Section 508 compliance)</li>
+                <li>Universities and educational institutions</li>
+                <li>Healthcare providers</li>
+                <li>Legal and financial services</li>
+                <li>SaaS platforms generating automated PDFs</li>
+                <li>Procurement and compliance teams</li>
+              </ul>
+              If you publish PDFs online, accessibility validation is essential.
+            </dd>
+          </div>
+
+          <div class="faq-item">
+            <dt>What is the difference between PDF/UA and WCAG?</dt>
+            <dd>
+              PDF/UA focuses specifically on technical PDF structure. WCAG covers broader accessibility principles such as
+              contrast, navigation, and usability.
+            </dd>
+          </div>
+
+          <div class="faq-item">
+            <dt>Is this powered by veraPDF?</dt>
+            <dd>
+              Yes. Validation is powered by the open-source veraPDF engine for accurate standards-based testing. veraPDF is
+              an industry-standard validator supported by the Open Preservation Foundation and the PDF Association. In
+              <a href="https://pdfix.net/pdf-accessibility-validators/" target="_blank" rel="noopener noreferrer">published validator comparisons</a>,
+              veraPDF is often the strictest checker and can surface PDF/UA issues that PAC, Adobe Acrobat, and CommonLook
+              may miss.
+            </dd>
+          </div>
+
+          <div class="faq-item">
+            <dt>Can I use this for Section 508 compliance?</dt>
+            <dd>Yes. PDF/UA validation supports Section 508 accessibility requirements.</dd>
+          </div>
+
+          <div class="faq-item">
+            <dt>Are there limitations to the free API?</dt>
+            <dd>
+              <p>
+                The free API is intended for evaluation, light development, and moderate usage. To ensure consistent
+                performance and availability for all users, it operates with managed rate limits and lower concurrency
+                thresholds.
+              </p>
+              <p>
+                Organizations with higher validation volumes, production workloads, or batch-processing requirements may
+                benefit from a customized solution.
+              </p>
+            </dd>
+          </div>
+
+          <div class="faq-item">
+            <dt>Do you store files, URLs, or validation results?</dt>
+            <dd>
+              No files, URLs, request payloads, or validation results are intentionally stored beyond transient processing
+              needed to complete a request. Submitted files are processed by AWS Lambda execution environments using
+              ephemeral storage and are discarded after execution, subject to AWS platform behavior.
+            </dd>
+          </div>
+          </dl>
         </div>
       </details>
     </main>
