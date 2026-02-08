@@ -93,10 +93,22 @@
           </span>
         </summary>
         <div class="collapsible-content instructions-content">
-          <p class="result-meta">
-            Endpoint:
+          <div class="result-meta endpoint-row">
+            <span>Endpoint:</span>
             <code id="api-base-url-display"></code>
-          </p>
+            <button
+              type="button"
+              class="copy-icon-btn"
+              data-copy-target="api-base-url-display"
+              aria-label="Copy to Clipboard"
+              title="Copy to Clipboard"
+            >
+              <svg viewBox="0 0 24 24" role="img" aria-label="Copy to Clipboard">
+                <path d="M9 9h11v11H9z"></path>
+                <path d="M4 4h11v11H4z"></path>
+              </svg>
+            </button>
+          </div>
 
           <div class="instructions-grid">
             <article>
