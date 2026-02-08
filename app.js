@@ -24,6 +24,7 @@
   let loadingActionIndex = 0;
 
   const form = document.getElementById("validator-form");
+  const formPanel = document.querySelector(".form-panel");
   const fileInput = document.getElementById("pdf-file");
   const pdfUrlInput = document.getElementById("pdf-url");
   const submitButton = document.getElementById("submit-button");
@@ -301,6 +302,9 @@
 
   function setSubmitting(isSubmitting, message) {
     submitButton.disabled = isSubmitting;
+    if (formPanel) {
+      formPanel.classList.toggle("is-loading", isSubmitting);
+    }
     if (isSubmitting) {
       submitButton.innerHTML = '<span class="button-spinner" aria-hidden="true"></span><span>Running...</span>';
     } else {
@@ -433,11 +437,14 @@
   function flashCopiedState(button) {
     button.classList.add("copied");
     const previousTitle = button.title;
+    const previousAriaLabel = button.getAttribute("aria-label");
     button.title = "Copied";
+    button.setAttribute("aria-label", "Copied!");
 
     window.setTimeout(() => {
       button.classList.remove("copied");
       button.title = previousTitle || "Copy to Clipboard";
+      button.setAttribute("aria-label", previousAriaLabel || "Copy to Clipboard");
     }, 1000);
   }
 

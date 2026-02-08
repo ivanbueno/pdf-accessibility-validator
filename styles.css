@@ -129,6 +129,25 @@ h1 {
   padding: 1rem;
 }
 
+.form-panel.is-loading {
+  animation: form-panel-border-pulse 1.35s ease-in-out infinite;
+}
+
+@keyframes form-panel-border-pulse {
+  0% {
+    border-color: var(--line);
+    box-shadow: var(--shadow);
+  }
+  50% {
+    border-color: color-mix(in srgb, var(--accent) 46%, var(--line));
+    box-shadow: var(--shadow), 0 0 0 2px color-mix(in srgb, var(--accent) 28%, transparent);
+  }
+  100% {
+    border-color: var(--line);
+    box-shadow: var(--shadow);
+  }
+}
+
 .form-panel form > * + * {
   margin-top: 1.25rem;
 }
@@ -335,6 +354,7 @@ button:disabled {
 }
 
 .copy-icon-btn {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -362,6 +382,25 @@ button:disabled {
 .copy-icon-btn.copied {
   color: var(--ok);
   border-color: color-mix(in srgb, var(--ok) 50%, var(--line));
+}
+
+.copy-icon-btn.copied::after {
+  content: "Copied!";
+  position: absolute;
+  bottom: calc(100% + 0.3rem);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0.15rem 0.4rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--ok) 32%, var(--line));
+  background: #fff;
+  color: var(--ok);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.68rem;
+  line-height: 1.2;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 2;
 }
 
 .instructions-grid pre {
