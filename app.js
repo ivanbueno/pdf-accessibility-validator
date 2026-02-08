@@ -1,9 +1,13 @@
 (() => {
   const APP_CONFIG = {
     apiBaseUrl: "https://e3pyeerkgstf2covgz2yjkvj2m0bnqiq.lambda-url.us-east-1.on.aws",
+    // Set your GA4 Measurement ID (for example: G-ABC123XYZ9).
+    // Leave empty to disable analytics tracking.
+    gaMeasurementId: "G-N43MCS8JPD",
   };
   const MAX_UPLOAD_MB = 3;
   const MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024;
+  const GA_MEASUREMENT_ID_PATTERN = /^G-[A-Z0-9]+$/i;
   const LOADING_ACTIONS = [
     "Preparing the PDF for validation...",
     "Checking PDF container syntax and document flags...",
@@ -42,6 +46,8 @@
   const modeTabs = Array.from(form.querySelectorAll(".mode-tab"));
   const profileTemplate = document.getElementById("profile-template");
 
+  initAnalytics(APP_CONFIG.gaMeasurementId);
+
   modeTabs.forEach((tab) => {
     tab.addEventListener("click", () => {
       const mode = tab.dataset.mode || "upload";
@@ -65,6 +71,9 @@
     }
 
     setSubmitting(true);
+    trackEvent("validate_request_started", {
+      input_mode: selectedMode,
+    });
 
     try {
       const validateUrl = buildValidateUrl(lambdaBaseUrl);
@@ -73,10 +82,18 @@
         : await runUrlValidation(validateUrl);
 
       renderResponse(response);
+      trackEvent("validate_request_succeeded", {
+        input_mode: selectedMode,
+        overall_pass: Boolean(response.passed),
+        profile_count: Array.isArray(response.results) ? response.results.length : 0,
+      });
       setSubmitting(false, "Validation complete.");
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       showError(message);
+      trackEvent("validate_request_failed", {
+        input_mode: selectedMode,
+      });
       setSubmitting(false, "Validation failed.");
     }
   });
@@ -420,9 +437,43 @@
     try {
       await copyText(text);
       flashCopiedState(button);
+      trackEvent("copy_to_clipboard", {
+        target: targetId,
+      });
     } catch (_error) {
       showError("Could not copy to clipboard in this browser context.");
     }
+  }
+
+  function initAnalytics(measurementId) {
+    const id = String(measurementId || "").trim();
+    if (!id || !GA_MEASUREMENT_ID_PATTERN.test(id)) {
+      return;
+    }
+
+    const existingTag = document.querySelector(`script[src*="gtag/js?id=${id}"]`);
+    if (!existingTag) {
+      const script = document.createElement("script");
+      script.async = true;
+      script.src = `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(id)}`;
+      document.head.appendChild(script);
+    }
+
+    window.dataLayer = window.dataLayer || [];
+    window.gtag = function gtag() {
+      window.dataLayer.push(arguments);
+    };
+    window.gtag("js", new Date());
+    window.gtag("config", id, {
+      anonymize_ip: true,
+    });
+  }
+
+  function trackEvent(eventName, params) {
+    if (typeof window.gtag !== "function") {
+      return;
+    }
+    window.gtag("event", eventName, params || {});
   }
 
   async function copyText(text) {
