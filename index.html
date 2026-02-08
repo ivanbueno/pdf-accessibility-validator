@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>PDF Accessibility Validator</title>
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
@@ -121,6 +122,18 @@
               <pre id="get-example"></pre>
             </article>
           </div>
+        </div>
+      </details>
+
+      <details class="panel collapsible-panel why-panel">
+        <summary class="collapsible-summary">Why VeraPDF?</summary>
+        <div class="collapsible-content why-content">
+          <p>
+            VeraPDF is an industry-standard, open-source validator supported by the Open Preservation Foundation and the PDF
+            Association. In <a href="https://pdfix.net/pdf-accessibility-validators/" target="_blank" rel="noopener noreferrer">published validator comparisons</a>, VeraPDF is often the strictest checker. It can surface PDF/UA issues
+            that PAC, Adobe Acrobat, and CommonLook may miss, which is why this API uses VeraPDF as its baseline engine for
+            technical accessibility validation.
+          </p>
         </div>
       </details>
 

@@ -416,6 +416,13 @@ button:disabled {
   word-break: break-word;
 }
 
+.why-content p {
+  margin: 0.55rem 0 0;
+  color: var(--ink-soft);
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+
 .privacy-content p {
   margin: 0;
   color: var(--ink-soft);
