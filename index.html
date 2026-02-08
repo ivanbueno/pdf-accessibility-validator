@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PDF Accessibility Validator</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="background-glow background-glow-a" aria-hidden="true"></div>
+    <div class="background-glow background-glow-b" aria-hidden="true"></div>
+
+    <main class="page">
+      <header class="hero">
+        <p class="eyebrow">veraPDF Online Checker</p>
+        <h1>PDF Accessibility Validator</h1>
+        <p class="lead">
+          Validate PDF against <strong>PDF/UA-1</strong> and <strong>WCAG 2.2 profile</strong> in a single request.
+        </p>
+      </header>
+
+      <section class="panel form-panel">
+        <form id="validator-form" novalidate>
+          <div class="mode-tabs" role="tablist" aria-label="Validation input mode">
+            <button
+              id="tab-url"
+              type="button"
+              class="mode-tab is-active"
+              data-mode="url"
+              role="tab"
+              aria-selected="true"
+              aria-controls="url-mode"
+            >
+              PDF URL
+            </button>
+            <button
+              id="tab-upload"
+              type="button"
+              class="mode-tab"
+              data-mode="upload"
+              role="tab"
+              aria-selected="false"
+              aria-controls="upload-mode"
+            >
+              Upload PDF
+            </button>
+          </div>
+          <input id="input-mode" name="input_mode" type="hidden" value="url" />
+
+          <div id="upload-mode" class="mode-panel hidden" role="tabpanel" aria-labelledby="tab-upload" aria-hidden="true">
+            <label class="field">
+              <span>PDF File</span>
+              <input id="pdf-file" name="pdf_file" type="file" accept="application/pdf,.pdf" />
+              <small>Maximum upload size: 3 MB.</small>
+            </label>
+          </div>
+
+          <div id="url-mode" class="mode-panel" role="tabpanel" aria-labelledby="tab-url" aria-hidden="false">
+            <label class="field">
+              <span>PDF URL</span>
+              <input id="pdf-url" name="pdf_url" type="url" placeholder="https://example.com/sample.pdf" />
+            </label>
+          </div>
+
+          <div class="actions">
+            <button id="submit-button" type="submit">Run Validation</button>
+            <span id="status-text" aria-live="polite"></span>
+          </div>
+        </form>
+      </section>
+
+      <section id="result-panel" class="panel hidden" aria-live="polite"></section>
+      <section id="error-panel" class="panel error-panel hidden" aria-live="polite"></section>
+
+      <details class="panel collapsible-panel instructions-panel">
+        <summary class="collapsible-summary">Direct API Calls</summary>
+        <div class="collapsible-content instructions-content">
+          <p class="result-meta">
+            Endpoint:
+            <code id="api-base-url-display"></code>
+          </p>
+
+          <div class="instructions-grid">
+            <article>
+              <div class="instructions-title-row">
+                <h3>POST /validate (base64 upload)</h3>
+                <button
+                  type="button"
+                  class="copy-icon-btn"
+                  data-copy-target="post-example"
+                  aria-label="Copy to Clipboard"
+                  title="Copy to Clipboard"
+                >
+                  <svg viewBox="0 0 24 24" role="img" aria-label="Copy to Clipboard">
+                    <path d="M9 9h11v11H9z"></path>
+                    <path d="M4 4h11v11H4z"></path>
+                  </svg>
+                </button>
+              </div>
+              <pre id="post-example"></pre>
+            </article>
+            <article>
+              <div class="instructions-title-row">
+                <h3>GET /validate (pdf_url query)</h3>
+                <button
+                  type="button"
+                  class="copy-icon-btn"
+                  data-copy-target="get-example"
+                  aria-label="Copy to Clipboard"
+                  title="Copy to Clipboard"
+                >
+                  <svg viewBox="0 0 24 24" role="img" aria-label="Copy to Clipboard">
+                    <path d="M9 9h11v11H9z"></path>
+                    <path d="M4 4h11v11H4z"></path>
+                  </svg>
+                </button>
+              </div>
+              <pre id="get-example"></pre>
+            </article>
+          </div>
+        </div>
+      </details>
+
+      <details class="panel collapsible-panel privacy-panel">
+        <summary class="collapsible-summary">Privacy Policy</summary>
+        <div class="collapsible-content privacy-content">
+          <p>
+            No files, URLs, request payloads, or validation results are intentionally stored by this application or API beyond
+            transient processing needed to complete a request.
+          </p>
+          <p>
+            Submitted files are processed by AWS Lambda execution environments using ephemeral storage and are discarded
+            after execution, subject to AWS platform behavior.
+          </p>
+        </div>
+      </details>
+    </main>
+    <footer class="site-footer">
+      <p>&copy; <span id="current-year"></span> Ivan Bueno.  For inquiries, contact <a href="mailto:dev@ivanbueno.com">dev@ivanbueno.com</a>.</p>
+      <p class="legal-note">
+        Provided as-is, without warranties; no liability for direct, indirect, incidental, or consequential damages.
+      </p>
+    </footer>
+
+    <template id="profile-template">
+      <article class="profile-card">
+        <header class="profile-header">
+          <h3 class="profile-name"></h3>
+          <span class="badge"></span>
+        </header>
+
+        <div class="summary-grid">
+          <div class="metric">
+            <span class="metric-label">Errors</span>
+            <span class="metric-value metric-errors"></span>
+          </div>
+          <div class="metric">
+            <span class="metric-label">Failed Rules</span>
+            <span class="metric-value metric-failed-rules"></span>
+          </div>
+          <div class="metric">
+            <span class="metric-label">Checked Rules</span>
+            <span class="metric-value metric-checked-rules"></span>
+          </div>
+          <div class="metric">
+            <span class="metric-label">Duration</span>
+            <span class="metric-value metric-duration"></span>
+          </div>
+        </div>
+
+        <div class="breakdown-grid">
+          <section>
+            <h4>By Severity</h4>
+            <ul class="chip-list severity-list"></ul>
+          </section>
+          <section>
+            <h4>By Category</h4>
+            <ul class="chip-list category-list"></ul>
+          </section>
+        </div>
+
+        <details class="issues-details">
+          <summary>Issues</summary>
+          <div class="issues-table-wrap">
+            <table class="issues-table">
+              <thead>
+                <tr>
+                  <th>Severity</th>
+                  <th>Rule</th>
+                  <th>Message</th>
+                  <th>Page</th>
+                  <th>Category</th>
+                </tr>
+              </thead>
+              <tbody class="issues-body"></tbody>
+            </table>
+          </div>
+        </details>
+
+        <details class="raw-details">
+          <summary>Raw Output</summary>
+          <pre class="raw-pre"></pre>
+        </details>
+      </article>
+    </template>
+
+    <script src="./app.js" defer></script>
+  </body>
+</html>

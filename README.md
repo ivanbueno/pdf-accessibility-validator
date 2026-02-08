@@ -1,1 +1,0 @@
-# pdf-accessibility-validator
