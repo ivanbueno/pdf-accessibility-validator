@@ -326,6 +326,44 @@ button:disabled {
   padding: 1rem;
 }
 
+#result-panel.result-pass {
+  border-color: color-mix(in srgb, var(--ok) 40%, var(--line));
+  background:
+    radial-gradient(circle at 90% 10%, rgba(42, 143, 95, 0.16), transparent 42%),
+    linear-gradient(180deg, rgba(246, 255, 250, 0.98), rgba(236, 249, 242, 0.98));
+}
+
+#result-panel.result-fail {
+  border-color: color-mix(in srgb, var(--fail) 38%, var(--line));
+  background:
+    radial-gradient(circle at 90% 10%, rgba(181, 63, 44, 0.16), transparent 42%),
+    linear-gradient(180deg, rgba(255, 245, 244, 0.98), rgba(253, 237, 234, 0.98));
+}
+
+#result-panel.result-pass .result-header {
+  border-bottom-color: color-mix(in srgb, var(--ok) 36%, var(--line));
+}
+
+#result-panel.result-fail .result-header {
+  border-bottom-color: color-mix(in srgb, var(--fail) 36%, var(--line));
+}
+
+#result-panel.result-pass .result-header h2 {
+  color: color-mix(in srgb, var(--ok) 72%, #1b4731);
+}
+
+#result-panel.result-fail .result-header h2 {
+  color: color-mix(in srgb, var(--fail) 72%, #6e2318);
+}
+
+#result-panel.result-pass .result-meta {
+  color: color-mix(in srgb, var(--ok) 64%, var(--ink-soft));
+}
+
+#result-panel.result-fail .result-meta {
+  color: color-mix(in srgb, var(--fail) 62%, var(--ink-soft));
+}
+
 #result-panel.result-enter {
   animation: result-slide-down 0.38s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
@@ -846,6 +884,16 @@ button:disabled {
   background: #fff;
 }
 
+#result-panel.result-pass .profile-card {
+  border-color: color-mix(in srgb, var(--ok) 32%, var(--line));
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(243, 252, 248, 0.98));
+}
+
+#result-panel.result-fail .profile-card {
+  border-color: color-mix(in srgb, var(--fail) 30%, var(--line));
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(255, 245, 243, 0.98));
+}
+
 .profile-header {
   display: flex;
   justify-content: space-between;
@@ -870,6 +918,16 @@ button:disabled {
   border-radius: 0.65rem;
   padding: 0.6rem;
   background: var(--bg-soft);
+}
+
+#result-panel.result-pass .metric {
+  border-color: color-mix(in srgb, var(--ok) 28%, var(--line));
+  background: color-mix(in srgb, var(--ok) 8%, #ffffff);
+}
+
+#result-panel.result-fail .metric {
+  border-color: color-mix(in srgb, var(--fail) 28%, var(--line));
+  background: color-mix(in srgb, var(--fail) 8%, #ffffff);
 }
 
 .metric-label {

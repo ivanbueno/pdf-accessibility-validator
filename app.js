@@ -186,6 +186,7 @@
 
     const overallBadgeClass = data.passed ? "pass" : "fail";
     const overallBadgeText = data.passed ? "Overall: Pass" : "Overall: Fail";
+    const resultStateClass = data.passed ? "result-pass" : "result-fail";
 
     const headerHtml = `
       <div class="result-header">
@@ -199,6 +200,8 @@
     `;
 
     resultPanel.innerHTML = headerHtml;
+    resultPanel.classList.remove("result-pass", "result-fail");
+    resultPanel.classList.add(resultStateClass);
     resultPanel.classList.remove("hidden");
     animateResultPanel();
 
@@ -347,12 +350,14 @@
 
   function clearOutput() {
     resultPanel.classList.add("hidden");
+    resultPanel.classList.remove("result-pass", "result-fail");
     errorPanel.classList.add("hidden");
     errorPanel.textContent = "";
   }
 
   function showError(message) {
     resultPanel.classList.add("hidden");
+    resultPanel.classList.remove("result-pass", "result-fail");
     errorPanel.textContent = message;
     errorPanel.classList.remove("hidden");
   }
