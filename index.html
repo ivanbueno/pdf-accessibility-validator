@@ -8,7 +8,7 @@
       content="Validate your PDF for PDF/UA-1, WCAG 2.2, and Section 508 compliance online. Free PDF accessibility checker powered by veraPDF. API available."
     />
     <title>Free PDF Accessibility Checker | PDF/UA & WCAG Validator Online | PDF Audit</title>
-    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <link rel="icon" type="image/png" sizes="256x256" href="./favicon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
@@ -22,15 +22,18 @@
       <header class="hero">
         <p class="eyebrow">PDF/UA & WCAG Validator Online</p>
         <div class="hero-title">
-          <img class="hero-logo" src="./favicon.svg" alt="" aria-hidden="true" />
-          <h1>Free PDF Accessibility Checker</h1>
+          <img class="hero-logo" src="./favicon.png" alt="" aria-hidden="true" />
+          <h1>Free PDF Accessibility Checker API</h1>
         </div>
         <p class="lead">
-          Check if your PDF is PDF/UA compliant and WCAG 2.2 accessible. Powered by veraPDF. Instant results via web or API.
+          Check if your PDF is PDF/UA compliant and WCAG 2.2 accessible.
         </p>
       </header>
 
       <section class="panel form-panel">
+        <h2 class="form-panel-summary">
+          <span class="form-panel-summary-main">Instant results via web or API.</span>
+        </h2>
         <form id="validator-form" novalidate>
           <div class="mode-tabs" role="tablist" aria-label="Validation input mode">
             <button
@@ -164,20 +167,23 @@
           </div>
 
           <footer class="api-footer" aria-label="API overview">
-            <h3 class="api-footer-title">
-              <svg class="api-footer-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                <path d="M19.43 12.98c.04-.32.07-.65.07-.98s-.03-.66-.08-.98l2.11-1.65a.5.5 0 0 0 .12-.64l-2-3.46a.5.5 0 0 0-.6-.22l-2.49 1a7.03 7.03 0 0 0-1.69-.98l-.38-2.65A.5.5 0 0 0 14 1h-4a.5.5 0 0 0-.49.42l-.38 2.65c-.61.25-1.17.57-1.69.98l-2.49-1a.5.5 0 0 0-.6.22l-2 3.46a.5.5 0 0 0 .12.64l2.11 1.65c-.05.32-.08.65-.08.98s.03.66.08.98L2.47 14.63a.5.5 0 0 0-.12.64l2 3.46a.5.5 0 0 0 .6.22l2.49-1c.52.41 1.08.73 1.69.98l.38 2.65a.5.5 0 0 0 .49.42h4a.5.5 0 0 0 .49-.42l.38-2.65c.61-.25 1.17-.57 1.69-.98l2.49 1a.5.5 0 0 0 .6-.22l2-3.46a.5.5 0 0 0-.12-.64l-2.11-1.65ZM12 15.5A3.5 3.5 0 1 1 12 8.5a3.5 3.5 0 0 1 0 7Z"/>
-              </svg>
-              <span>Automate PDF compliance testing in your workflow.</span>
-            </h3>
-            <p>Designed for cloud-native deployment, our API allows you to:</p>
-            <ul>
-              <li>Validate base64-encoded PDFs</li>
-              <li>Validate public PDF URLs</li>
-              <li>Retrieve structured validation results</li>
-              <li>Integrate into CI/CD pipelines</li>
-              <li>Build PDF remediation pipelines</li>
-            </ul>
+            <img class="api-footer-mascot" src="./owl-engineer.png" alt="" aria-hidden="true" />
+            <div class="api-footer-content">
+              <h3 class="api-footer-title">
+                <svg class="api-footer-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path d="M19.43 12.98c.04-.32.07-.65.07-.98s-.03-.66-.08-.98l2.11-1.65a.5.5 0 0 0 .12-.64l-2-3.46a.5.5 0 0 0-.6-.22l-2.49 1a7.03 7.03 0 0 0-1.69-.98l-.38-2.65A.5.5 0 0 0 14 1h-4a.5.5 0 0 0-.49.42l-.38 2.65c-.61.25-1.17.57-1.69.98l-2.49-1a.5.5 0 0 0-.6.22l-2 3.46a.5.5 0 0 0 .12.64l2.11 1.65c-.05.32-.08.65-.08.98s.03.66.08.98L2.47 14.63a.5.5 0 0 0-.12.64l2 3.46a.5.5 0 0 0 .6.22l2.49-1c.52.41 1.08.73 1.69.98l.38 2.65a.5.5 0 0 0 .49.42h4a.5.5 0 0 0 .49-.42l.38-2.65c.61-.25 1.17-.57 1.69-.98l2.49 1a.5.5 0 0 0 .6-.22l2-3.46a.5.5 0 0 0-.12-.64l-2.11-1.65ZM12 15.5A3.5 3.5 0 1 1 12 8.5a3.5 3.5 0 0 1 0 7Z"/>
+                </svg>
+                <span>Automate PDF compliance testing in your workflow.</span>
+              </h3>
+              <p>Designed for cloud-native deployment, our API allows you to:</p>
+              <ul>
+                <li>Validate base64-encoded PDFs</li>
+                <li>Validate public PDF URLs</li>
+                <li>Retrieve structured validation results</li>
+                <li>Integrate into CI/CD pipelines</li>
+                <li>Build PDF remediation pipelines</li>
+              </ul>
+            </div>
           </footer>
         </div>
       </details>
@@ -253,6 +259,7 @@
           </span>
         </summary>
         <div class="collapsible-content faq-content">
+          <img class="faq-mascot" src="./owl-professor.png" alt="" aria-hidden="true" />
           <dl class="faq-list">
           <div class="faq-item">
             <dt>Who needs a PDF Accessibility Checker?</dt>
@@ -290,6 +297,14 @@
           </div>
 
           <div class="faq-item">
+            <dt>What technology stack powers this validator?</dt>
+            <dd>
+              The validator runs on a Python 3.11 backend in an AWS Lambda container and uses the Java-based veraPDF CLI
+              for standards validation. It is exposed through an HTTP endpoint (Lambda Function URL or API Gateway).
+            </dd>
+          </div>
+
+          <div class="faq-item">
             <dt>Can I use this for Section 508 compliance?</dt>
             <dd>Yes. PDF/UA validation supports Section 508 accessibility requirements.</dd>
           </div>
@@ -301,6 +316,10 @@
                 The free API is intended for evaluation, light development, and moderate usage. To ensure consistent
                 performance and availability for all users, it operates with managed rate limits and lower concurrency
                 thresholds.
+              </p>
+              <p>
+                Current size limits: web upload is capped at 3 MB per PDF, and direct API validation is capped at 10 MB
+                per PDF.
               </p>
               <p>
                 Organizations with higher validation volumes, production workloads, or batch-processing requirements may

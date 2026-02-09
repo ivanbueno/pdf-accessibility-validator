@@ -115,8 +115,8 @@ body {
 }
 
 .hero-logo {
-  width: clamp(2rem, 3.6vw, 2.55rem);
-  height: clamp(2rem, 3.6vw, 2.55rem);
+  width: clamp(2.6rem, 4.8vw, 3.4rem);
+  height: clamp(2.6rem, 4.8vw, 3.4rem);
   flex: 0 0 auto;
 }
 
@@ -142,7 +142,42 @@ h1 {
 .form-panel {
   position: relative;
   isolation: isolate;
+  padding: 0;
+  overflow: hidden;
+}
+
+.form-panel-summary {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+  margin: 0;
+  padding: 0.78rem 1rem 0.82rem;
+  border: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--ink-soft) 20%, var(--line));
+  background: linear-gradient(100deg, rgba(244, 236, 225, 0.97) 0%, rgba(236, 225, 211, 0.92) 62%, rgba(236, 225, 211, 0.62) 100%);
+  box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.28);
+  font-size: clamp(1rem, 1.8vw, 1.18rem);
+  line-height: 1.35;
+  color: var(--accent-strong);
+}
+
+.form-panel form {
   padding: 1rem;
+}
+
+.form-panel::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(48%, 430px);
+  background: url("./owl-full-body.png") right 1.4rem center / contain no-repeat;
+  opacity: 0.22;
+  pointer-events: none;
+  z-index: 0;
 }
 
 .form-panel::before {
@@ -158,6 +193,11 @@ h1 {
     repeating-linear-gradient(0deg, color-mix(in srgb, var(--accent) 55%, #fff) 0 12px, transparent 12px 20px) 100% 0 / 2px 220% no-repeat,
     repeating-linear-gradient(90deg, color-mix(in srgb, var(--accent) 55%, #fff) 0 12px, transparent 12px 20px) 0 100% / 220% 2px no-repeat,
     repeating-linear-gradient(0deg, color-mix(in srgb, var(--accent) 55%, #fff) 0 12px, transparent 12px 20px) 0 0 / 2px 220% no-repeat;
+}
+
+.form-panel > * {
+  position: relative;
+  z-index: 2;
 }
 
 .form-panel.is-loading {
@@ -188,6 +228,18 @@ h1 {
 
 .form-panel form > * + * {
   margin-top: 1.25rem;
+}
+
+@media (min-width: 980px) {
+  .form-panel::after {
+    width: min(52%, 500px);
+    opacity: 0.28;
+    background-position: right 2rem center;
+  }
+
+  .form-panel form {
+    padding-right: min(24vw, 260px);
+  }
 }
 
 .grid.two {
@@ -483,9 +535,39 @@ button:disabled {
   margin-top: 0.95rem;
   padding: 0.95rem 1rem 1rem;
   border-radius: 0.85rem;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.72rem;
+  align-items: start;
   background:
     radial-gradient(circle at 92% 10%, rgba(23, 107, 136, 0.2), transparent 38%),
     linear-gradient(155deg, rgba(15, 79, 102, 0.1), rgba(255, 255, 255, 0.96) 58%, rgba(236, 248, 253, 0.96) 100%);
+}
+
+.api-footer-mascot {
+  display: none;
+  width: clamp(6rem, 24vw, 8rem);
+  height: auto;
+  justify-self: start;
+  align-self: start;
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.api-footer-content {
+  min-width: 0;
+}
+
+@media (min-width: 820px) {
+  .api-footer {
+    grid-template-columns: auto 1fr;
+    column-gap: 0.95rem;
+  }
+
+  .api-footer-mascot {
+    display: block;
+    width: clamp(6.8rem, 13vw, 9rem);
+  }
 }
 
 .api-footer h3 {
@@ -745,11 +827,12 @@ button:disabled {
   margin: 0.38rem 0 0;
   font-size: clamp(1.02rem, 2vw, 1.3rem);
   line-height: 1.24;
+  color: var(--accent-strong);
 }
 
 .info-section p {
   margin: 0.62rem 0 0;
-  color: var(--ink-soft);
+  color: color-mix(in srgb, var(--accent-secondary-strong) 64%, var(--ink-soft));
   font-size: 0.92rem;
   line-height: 1.45;
 }
@@ -763,12 +846,49 @@ button:disabled {
 
 .info-section li {
   line-height: 1.4;
+  color: color-mix(in srgb, var(--accent-secondary-strong) 60%, var(--ink-soft));
 }
 
 .info-section-columns {
   display: grid;
   gap: 0.9rem;
   margin-top: 0.2rem;
+}
+
+.info-section-wide {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.info-section-wide::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.81) 0%, rgba(255, 248, 241, 0.76) 58%, rgba(255, 248, 241, 0.61) 100%),
+    radial-gradient(circle at 84% 86%, rgba(255, 248, 241, 0.47), transparent 46%);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.info-section-wide::after {
+  content: "";
+  position: absolute;
+  right: 0.65rem;
+  bottom: 0.45rem;
+  width: clamp(10.1rem, 28.5vw, 17.3rem);
+  aspect-ratio: 173 / 260;
+  transform: translateY(40%);
+  background: url("./owl-sound.png") right bottom / contain no-repeat;
+  opacity: 0.34;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.info-section-wide > * {
+  position: relative;
+  z-index: 2;
 }
 
 @media (min-width: 980px) {
@@ -784,7 +904,24 @@ button:disabled {
 }
 
 .faq-content {
+  display: flow-root;
   padding-top: 0.95rem;
+}
+
+.faq-mascot {
+  display: none;
+  float: right;
+  width: clamp(8.4rem, 24vw, 13.2rem);
+  height: auto;
+  margin: 0 0.78rem 0.75rem 1.2rem;
+  opacity: 0.34;
+  pointer-events: none;
+}
+
+@media (min-width: 900px) {
+  .faq-mascot {
+    display: block;
+  }
 }
 
 .faq-list {
