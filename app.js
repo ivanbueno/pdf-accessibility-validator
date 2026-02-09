@@ -57,6 +57,7 @@
       const mode = tab.dataset.mode || "upload";
       setSelectedMode(mode);
     });
+    tab.addEventListener("keydown", handleModeTabKeydown);
   });
   copyButtons.forEach((button) => {
     button.addEventListener("click", () => copyExample(button));
@@ -119,6 +120,36 @@
     });
 
     syncModePanels();
+  }
+
+  function handleModeTabKeydown(event) {
+    const key = event.key;
+    const currentIndex = modeTabs.indexOf(event.currentTarget);
+    if (currentIndex < 0) {
+      return;
+    }
+
+    let nextIndex = -1;
+    if (key === "ArrowRight" || key === "ArrowDown") {
+      nextIndex = (currentIndex + 1) % modeTabs.length;
+    } else if (key === "ArrowLeft" || key === "ArrowUp") {
+      nextIndex = (currentIndex - 1 + modeTabs.length) % modeTabs.length;
+    } else if (key === "Home") {
+      nextIndex = 0;
+    } else if (key === "End") {
+      nextIndex = modeTabs.length - 1;
+    } else {
+      return;
+    }
+
+    event.preventDefault();
+    const nextTab = modeTabs[nextIndex];
+    if (!nextTab) {
+      return;
+    }
+
+    nextTab.focus();
+    setSelectedMode(nextTab.dataset.mode || "upload");
   }
 
   function syncModePanels() {
@@ -197,6 +228,14 @@
     const setDragOver = (isActive) => {
       uploadDropzone.classList.toggle("is-dragover", isActive);
     };
+
+    uploadDropzone.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") {
+        return;
+      }
+      event.preventDefault();
+      fileInput.click();
+    });
 
     ["dragenter", "dragover", "dragleave", "drop"].forEach((eventName) => {
       uploadDropzone.addEventListener(eventName, prevent);

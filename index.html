@@ -62,9 +62,9 @@
           <input id="input-mode" name="input_mode" type="hidden" value="url" />
 
           <div id="upload-mode" class="mode-panel hidden" role="tabpanel" aria-labelledby="tab-upload" aria-hidden="true">
-            <label id="upload-dropzone" class="field file-dropzone">
+            <label id="upload-dropzone" class="field file-dropzone" tabindex="0">
               <span>PDF File</span>
-              <input id="pdf-file" name="pdf_file" type="file" accept="application/pdf,.pdf" />
+              <input id="pdf-file" name="pdf_file" type="file" accept="application/pdf,.pdf" aria-describedby="upload-drop-hint" />
               <small id="upload-drop-hint" aria-live="polite">Drag and drop a PDF here, or click to choose a file. Maximum upload size: 3 MB.</small>
             </label>
           </div>

@@ -279,6 +279,13 @@ h1 {
   transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
 }
 
+.file-dropzone:focus-visible,
+.file-dropzone:focus-within {
+  outline: 2px solid color-mix(in srgb, var(--accent-secondary) 58%, white);
+  outline-offset: 2px;
+  border-color: color-mix(in srgb, var(--accent-secondary) 46%, var(--line));
+}
+
 .file-dropzone input[type="file"] {
   cursor: pointer;
 }
@@ -297,6 +304,13 @@ input[type="file"] {
   background: var(--surface);
   font: inherit;
   padding: 0.7rem 0.85rem;
+}
+
+input[type="url"]:focus-visible,
+input[type="file"]:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 60%, white);
+  outline-offset: 2px;
+  border-color: color-mix(in srgb, var(--accent) 38%, var(--line));
 }
 
 .mode-tabs {
