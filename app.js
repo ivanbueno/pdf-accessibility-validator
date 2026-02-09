@@ -350,9 +350,10 @@
   function renderResponse(data) {
     errorPanel.classList.add("hidden");
 
-    const overallBadgeClass = data.passed ? "pass" : "fail";
-    const overallBadgeText = data.passed ? "Overall: Pass" : "Overall: Fail";
-    const resultStateClass = data.passed ? "result-pass" : "result-fail";
+    const overallState = getOverallResultState(data);
+    const overallBadgeClass = overallState;
+    const overallBadgeText = `Overall: ${overallState.charAt(0).toUpperCase()}${overallState.slice(1)}`;
+    const resultStateClass = `result-${overallState}`;
 
     const headerHtml = `
       <div class="result-header">
@@ -366,7 +367,7 @@
     `;
 
     resultPanel.innerHTML = headerHtml;
-    resultPanel.classList.remove("result-pass", "result-fail");
+    resultPanel.classList.remove("result-pass", "result-fail", "result-mixed");
     resultPanel.classList.add(resultStateClass);
     resultPanel.classList.remove("hidden");
     animateResultPanel();
@@ -407,6 +408,18 @@
 
       profileGrid.appendChild(fragment);
     });
+  }
+
+  function getOverallResultState(data) {
+    const results = Array.isArray(data.results) ? data.results : [];
+    const hasPassingProfile = results.some((profileResult) => profileResult && profileResult.passed === true);
+    const hasFailingProfile = results.some((profileResult) => profileResult && profileResult.passed === false);
+
+    if (hasPassingProfile && hasFailingProfile) {
+      return "mixed";
+    }
+
+    return data.passed ? "pass" : "fail";
   }
 
   function animateResultPanel() {
@@ -522,14 +535,14 @@
 
   function clearOutput() {
     resultPanel.classList.add("hidden");
-    resultPanel.classList.remove("result-pass", "result-fail");
+    resultPanel.classList.remove("result-pass", "result-fail", "result-mixed");
     errorPanel.classList.add("hidden");
     errorPanel.textContent = "";
   }
 
   function showError(message) {
     resultPanel.classList.add("hidden");
-    resultPanel.classList.remove("result-pass", "result-fail");
+    resultPanel.classList.remove("result-pass", "result-fail", "result-mixed");
     errorPanel.textContent = message;
     errorPanel.classList.remove("hidden");
   }

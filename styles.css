@@ -10,6 +10,7 @@
   --accent-secondary-strong: #0f4f66;
   --ok: #2a8f5f;
   --fail: #b53f2c;
+  --mixed: #a97f14;
   --line: #ddd2c3;
   --shadow: 0 14px 40px rgba(46, 27, 4, 0.13);
 }
@@ -455,6 +456,13 @@ button:disabled {
     linear-gradient(180deg, rgba(255, 245, 244, 0.98), rgba(253, 237, 234, 0.98));
 }
 
+#result-panel.result-mixed {
+  border-color: color-mix(in srgb, var(--mixed) 42%, var(--line));
+  background:
+    radial-gradient(circle at 90% 10%, rgba(169, 127, 20, 0.2), transparent 42%),
+    linear-gradient(180deg, rgba(255, 252, 241, 0.98), rgba(253, 246, 221, 0.98));
+}
+
 #result-panel.result-pass .result-header {
   border-top-color: color-mix(in srgb, var(--ok) 36%, var(--line));
   border-left-color: color-mix(in srgb, var(--ok) 36%, var(--line));
@@ -471,6 +479,14 @@ button:disabled {
   background: linear-gradient(90deg, rgba(181, 63, 44, 0.14), rgba(255, 255, 255, 0.9));
 }
 
+#result-panel.result-mixed .result-header {
+  border-top-color: color-mix(in srgb, var(--mixed) 38%, var(--line));
+  border-left-color: color-mix(in srgb, var(--mixed) 38%, var(--line));
+  border-right-color: color-mix(in srgb, var(--mixed) 38%, var(--line));
+  border-bottom-color: color-mix(in srgb, var(--mixed) 38%, var(--line));
+  background: linear-gradient(90deg, rgba(169, 127, 20, 0.16), rgba(255, 255, 255, 0.9));
+}
+
 #result-panel.result-pass .result-header h2 {
   color: color-mix(in srgb, var(--ok) 72%, #1b4731);
 }
@@ -479,12 +495,20 @@ button:disabled {
   color: color-mix(in srgb, var(--fail) 72%, #6e2318);
 }
 
+#result-panel.result-mixed .result-header h2 {
+  color: color-mix(in srgb, var(--mixed) 80%, #5b4306);
+}
+
 #result-panel.result-pass .result-meta {
   color: color-mix(in srgb, var(--ok) 64%, var(--ink-soft));
 }
 
 #result-panel.result-fail .result-meta {
   color: color-mix(in srgb, var(--fail) 62%, var(--ink-soft));
+}
+
+#result-panel.result-mixed .result-meta {
+  color: color-mix(in srgb, var(--mixed) 66%, var(--ink-soft));
 }
 
 #result-panel.result-enter {
@@ -1141,6 +1165,11 @@ button:disabled {
 .badge.fail {
   background: rgba(181, 63, 44, 0.12);
   color: var(--fail);
+}
+
+.badge.mixed {
+  background: rgba(169, 127, 20, 0.18);
+  color: var(--mixed);
 }
 
 .profile-grid {
