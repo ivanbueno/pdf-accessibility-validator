@@ -1115,12 +1115,12 @@ button:disabled {
   background: #fff;
 }
 
-#result-panel.result-pass .profile-card {
+.profile-card.profile-pass {
   border-color: color-mix(in srgb, var(--ok) 32%, var(--line));
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(243, 252, 248, 0.98));
 }
 
-#result-panel.result-fail .profile-card {
+.profile-card.profile-fail {
   border-color: color-mix(in srgb, var(--fail) 30%, var(--line));
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(255, 245, 243, 0.98));
 }
@@ -1151,12 +1151,12 @@ button:disabled {
   background: var(--bg-soft);
 }
 
-#result-panel.result-pass .metric {
+.profile-card.profile-pass .metric {
   border-color: color-mix(in srgb, var(--ok) 28%, var(--line));
   background: color-mix(in srgb, var(--ok) 8%, #ffffff);
 }
 
-#result-panel.result-fail .metric {
+.profile-card.profile-fail .metric {
   border-color: color-mix(in srgb, var(--fail) 28%, var(--line));
   background: color-mix(in srgb, var(--fail) 8%, #ffffff);
 }

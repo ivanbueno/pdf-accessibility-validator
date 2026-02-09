@@ -381,9 +381,15 @@
     sortedResults.forEach((profileResult) => {
       const fragment = profileTemplate.content.cloneNode(true);
 
+      const profileCard = fragment.querySelector(".profile-card");
       const profileName = fragment.querySelector(".profile-name");
       const badge = fragment.querySelector(".badge");
       const summary = profileResult.summary || {};
+
+      if (profileCard) {
+        profileCard.classList.remove("profile-pass", "profile-fail");
+        profileCard.classList.add(profileResult.passed ? "profile-pass" : "profile-fail");
+      }
 
       profileName.textContent = formatProfileName(profileResult.profile);
       badge.textContent = profileResult.passed ? "Pass" : "Fail";
