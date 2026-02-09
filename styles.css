@@ -178,6 +178,8 @@ h1 {
   width: min(48%, 430px);
   background: url("./owl-full-body.png") right 1.4rem center / contain no-repeat;
   opacity: 0.22;
+  transform: translate3d(0, 0, 0);
+  transform-origin: 76% 72%;
   pointer-events: none;
   z-index: 0;
 }
@@ -211,6 +213,10 @@ h1 {
   animation: border-march 1.6s linear infinite;
 }
 
+.form-panel.is-loading::after {
+  animation: mascot-inspect 2.2s ease-in-out infinite;
+}
+
 @keyframes border-march {
   from {
     background-position:
@@ -225,6 +231,24 @@ h1 {
       100% 40px,
       -40px 100%,
       0 -40px;
+  }
+}
+
+@keyframes mascot-inspect {
+  0% {
+    transform: translate3d(0, 0, 0) rotate(0deg);
+  }
+  25% {
+    transform: translate3d(-4px, -6px, 0) rotate(-1.2deg);
+  }
+  50% {
+    transform: translate3d(3px, 4px, 0) rotate(1deg);
+  }
+  75% {
+    transform: translate3d(-2px, -3px, 0) rotate(-0.7deg);
+  }
+  100% {
+    transform: translate3d(0, 0, 0) rotate(0deg);
   }
 }
 
@@ -1230,5 +1254,9 @@ summary {
   .form-panel.is-loading::before {
     animation: none;
     opacity: 0.7;
+  }
+
+  .form-panel.is-loading::after {
+    animation: none;
   }
 }
