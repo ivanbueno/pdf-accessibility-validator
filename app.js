@@ -361,8 +361,8 @@
           <span class="badge overall-badge ${overallBadgeClass}">${overallBadgeText}</span>
         </div>
       </div>
-      <p class="result-meta">${escapeHtml(data.disclaimer || "")}</p>
       <div class="profile-grid" id="profile-grid"></div>
+      <p class="result-meta">${escapeHtml(data.disclaimer || "")}</p>
     `;
 
     resultPanel.innerHTML = headerHtml;
