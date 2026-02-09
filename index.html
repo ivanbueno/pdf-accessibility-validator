@@ -21,10 +21,10 @@
     <main class="page">
       <header class="hero">
         <p class="eyebrow">PDF/UA & WCAG Validator Online</p>
-        <div class="hero-title">
+        <a class="hero-title" href="/">
           <img class="hero-logo" src="./favicon.png" alt="" aria-hidden="true" />
           <h1>Free PDF Accessibility Checker API</h1>
-        </div>
+        </a>
         <p class="lead">
           Check if your PDF is PDF/UA compliant and WCAG 2.2 accessible.
         </p>
@@ -62,10 +62,10 @@
           <input id="input-mode" name="input_mode" type="hidden" value="url" />
 
           <div id="upload-mode" class="mode-panel hidden" role="tabpanel" aria-labelledby="tab-upload" aria-hidden="true">
-            <label class="field">
+            <label id="upload-dropzone" class="field file-dropzone">
               <span>PDF File</span>
               <input id="pdf-file" name="pdf_file" type="file" accept="application/pdf,.pdf" />
-              <small>Maximum upload size: 3 MB.</small>
+              <small id="upload-drop-hint" aria-live="polite">Drag and drop a PDF here, or click to choose a file. Maximum upload size: 3 MB.</small>
             </label>
           </div>
 

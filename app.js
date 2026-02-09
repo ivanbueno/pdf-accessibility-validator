@@ -45,8 +45,12 @@
   const inputModeField = document.getElementById("input-mode");
   const modeTabs = Array.from(form.querySelectorAll(".mode-tab"));
   const profileTemplate = document.getElementById("profile-template");
+  const uploadDropzone = document.getElementById("upload-dropzone");
+  const uploadDropHint = document.getElementById("upload-drop-hint");
+  let pendingUploadFile = null;
 
   initAnalytics(APP_CONFIG.gaMeasurementId);
+  setupUploadDropzone();
 
   modeTabs.forEach((tab) => {
     tab.addEventListener("click", () => {
@@ -136,9 +140,12 @@
   }
 
   async function runFileValidation(validateUrl) {
-    const file = fileInput.files && fileInput.files[0];
+    const file = getSelectedUploadFile();
     if (!file) {
       throw new Error("Select a PDF file to upload.");
+    }
+    if (!isPdfFile(file)) {
+      throw new Error("Only PDF files are accepted.");
     }
     if (file.size > MAX_UPLOAD_BYTES) {
       throw new Error(`PDF upload exceeds ${MAX_UPLOAD_MB} MB limit.`);
@@ -172,6 +179,109 @@
     return requestJson(url.toString(), {
       method: "GET",
     });
+  }
+
+  function setupUploadDropzone() {
+    if (!uploadDropzone) {
+      return;
+    }
+
+    const defaultHint = uploadDropHint ? uploadDropHint.textContent.trim() : "";
+    let dragDepth = 0;
+
+    const prevent = (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+    };
+
+    const setDragOver = (isActive) => {
+      uploadDropzone.classList.toggle("is-dragover", isActive);
+    };
+
+    ["dragenter", "dragover", "dragleave", "drop"].forEach((eventName) => {
+      uploadDropzone.addEventListener(eventName, prevent);
+    });
+
+    uploadDropzone.addEventListener("dragenter", () => {
+      dragDepth += 1;
+      setDragOver(true);
+    });
+
+    uploadDropzone.addEventListener("dragover", () => {
+      setDragOver(true);
+    });
+
+    uploadDropzone.addEventListener("dragleave", () => {
+      dragDepth = Math.max(0, dragDepth - 1);
+      if (dragDepth === 0) {
+        setDragOver(false);
+      }
+    });
+
+    uploadDropzone.addEventListener("drop", (event) => {
+      dragDepth = 0;
+      setDragOver(false);
+
+      const droppedFiles = event.dataTransfer && event.dataTransfer.files;
+      if (!droppedFiles || droppedFiles.length === 0) {
+        return;
+      }
+
+      const file = droppedFiles[0];
+      if (!isPdfFile(file)) {
+        pendingUploadFile = null;
+        updateUploadDropHint(defaultHint);
+        showError("Only PDF files are accepted.");
+        return;
+      }
+      if (file.size > MAX_UPLOAD_BYTES) {
+        pendingUploadFile = null;
+        updateUploadDropHint(defaultHint);
+        showError(`PDF upload exceeds ${MAX_UPLOAD_MB} MB limit.`);
+        return;
+      }
+
+      pendingUploadFile = file;
+      fileInput.value = "";
+      updateUploadDropHint(defaultHint);
+    });
+
+    fileInput.addEventListener("change", () => {
+      pendingUploadFile = null;
+      updateUploadDropHint(defaultHint);
+    });
+
+    updateUploadDropHint(defaultHint);
+  }
+
+  function getSelectedUploadFile() {
+    return pendingUploadFile || (fileInput.files && fileInput.files[0]) || null;
+  }
+
+  function updateUploadDropHint(defaultHint) {
+    if (!uploadDropHint) {
+      return;
+    }
+
+    const file = getSelectedUploadFile();
+    if (!file) {
+      uploadDropHint.textContent = defaultHint;
+      return;
+    }
+
+    uploadDropHint.textContent = `Selected: ${file.name} (${formatFileSize(file.size)}). Maximum upload size: ${MAX_UPLOAD_MB} MB.`;
+  }
+
+  function isPdfFile(file) {
+    const name = String(file.name || "").toLowerCase();
+    return file.type === "application/pdf" || name.endsWith(".pdf");
+  }
+
+  function formatFileSize(bytes) {
+    if (bytes >= 1024 * 1024) {
+      return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+    }
+    return `${Math.max(1, Math.round(bytes / 1024))} KB`;
   }
 
   async function requestJson(url, options) {
