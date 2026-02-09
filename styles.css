@@ -176,7 +176,7 @@ h1 {
   right: 0;
   bottom: 0;
   width: min(48%, 430px);
-  background: url("./owl-full-body.png") right 1.4rem center / contain no-repeat;
+  background: url("./images/owl-full-body.png") right 1.4rem center / contain no-repeat;
   opacity: 0.22;
   transform: translate3d(0, 0, 0);
   transform-origin: 76% 72%;
@@ -982,7 +982,7 @@ button:disabled {
   width: clamp(10.1rem, 28.5vw, 17.3rem);
   aspect-ratio: 173 / 260;
   transform: translateY(40%);
-  background: url("./owl-sound.png") right bottom / contain no-repeat;
+  background: url("./images/owl-sound.png") right bottom / contain no-repeat;
   opacity: 0.34;
   pointer-events: none;
   z-index: 0;
