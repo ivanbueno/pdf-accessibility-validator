@@ -681,8 +681,8 @@ button:disabled {
 }
 
 .api-footer ul {
-  margin: 0.6rem 0 0;
-  padding: 0;
+  margin: 1.14rem 0 0;
+  padding: 0.15rem 0.2rem 0.1rem 0.05rem;
   list-style: none;
   display: grid;
   gap: 0.48rem;
@@ -702,11 +702,18 @@ button:disabled {
 }
 
 .api-footer li {
+  position: relative;
   margin: 0;
-  padding: 0.62rem 0.68rem;
-  border: 1px solid color-mix(in srgb, var(--accent-secondary) 30%, var(--line));
-  border-radius: 0.6rem;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(238, 248, 252, 0.92));
+  padding: 0.52rem 0.58rem 0.52rem 0.72rem;
+  border: 0;
+  border-left: 3px solid color-mix(in srgb, var(--accent-secondary) 52%, #ffffff);
+  border-radius: 0.4rem;
+  background: linear-gradient(
+    90deg,
+    rgba(23, 107, 136, 0.14) 0%,
+    rgba(23, 107, 136, 0.06) 62%,
+    rgba(23, 107, 136, 0) 100%
+  );
   color: color-mix(in srgb, var(--accent-secondary-strong) 70%, var(--ink-soft));
   font-size: 0.9rem;
   line-height: 1.38;
