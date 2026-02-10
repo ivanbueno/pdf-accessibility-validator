@@ -1347,6 +1347,58 @@ summary {
   letter-spacing: 0.05em;
 }
 
+.issue-message {
+  margin: 0;
+}
+
+.issues-table .issue-main-row td {
+  border-bottom: 0;
+}
+
+.issues-table .issue-fix-plan-row td {
+  padding: 0 0.45rem 0.55rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.issue-fix-plan {
+  margin-top: 0;
+  border: 1px solid color-mix(in srgb, var(--accent-secondary) 18%, var(--line));
+  border-radius: 0.6rem;
+  background: color-mix(in srgb, var(--accent-secondary) 5%, #fff);
+}
+
+.issue-fix-plan > summary {
+  padding: 0.35rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--accent-secondary-strong);
+}
+
+.issue-fix-plan[open] > summary {
+  border-bottom: 1px dashed color-mix(in srgb, var(--accent-secondary) 22%, var(--line));
+}
+
+.issue-fix-plan-body {
+  padding: 0.45rem 0.55rem 0.55rem;
+  display: grid;
+  gap: 0.42rem;
+}
+
+.issue-fix-plan-body p {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--ink-soft);
+}
+
+.issue-fix-steps {
+  margin: 0;
+  padding-left: 1rem;
+  display: grid;
+  gap: 0.25rem;
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
 .raw-pre {
   max-height: 220px;
   overflow: auto;

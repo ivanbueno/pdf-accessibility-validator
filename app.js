@@ -26,6 +26,47 @@
   const LOADING_INTERVAL_MS = 1600;
   const UNCATEGORIZED_CATEGORY = "__uncategorized__";
   const UNCATEGORIZED_CATEGORY_LABEL = "uncategorized";
+  const FIX_PLAN_TEMPLATES = [
+    {
+      pattern: /\b(metadata|xmp|title|language|lang|viewer|displaydoctitle)\b/i,
+      summary: "Document-level accessibility metadata is incomplete or inconsistent.",
+      action: "Set document title, primary language, and related viewer metadata so assistive tech announces the document correctly.",
+    },
+    {
+      pattern: /\b(structure|tag|tagged|parent|child|rolemap|heading|paragraph|reading order)\b/i,
+      summary: "The semantic structure tree needs correction.",
+      action: "Repair the tag hierarchy so headings, paragraphs, lists, and sections follow a valid parent-child order.",
+    },
+    {
+      pattern: /\b(table|th|td|header cell|scope|rowspan|colspan)\b/i,
+      summary: "Table semantics or header associations are broken.",
+      action: "Tag the table structure correctly and associate header cells with data cells using proper scope or ID references.",
+    },
+    {
+      pattern: /\b(figure|image|alt text|alternate text|artifact)\b/i,
+      summary: "Image semantics need alternative-text remediation.",
+      action: "Add meaningful alternate text to informative images and mark decorative graphics as artifacts.",
+    },
+    {
+      pattern: /\b(form|field|annotation|widget|label|tooltip|link)\b/i,
+      summary: "Interactive content lacks accessible properties.",
+      action: "Ensure fields, annotations, and links are tagged and include accessible labels or text equivalents.",
+    },
+    {
+      pattern: /\b(font|unicode|cmap|encoding|glyph|text extraction)\b/i,
+      summary: "Text encoding or font mapping is preventing reliable screen-reader output.",
+      action: "Embed fonts and repair Unicode mappings (ToUnicode/CMap) so extracted text matches visual text.",
+    },
+    {
+      pattern: /\b(color|contrast|readability)\b/i,
+      summary: "Visual readability requirements may not be met.",
+      action: "Adjust color contrast and visual styling so text remains perceivable across expected reading conditions.",
+    },
+  ];
+  const DEFAULT_FIX_PLAN_TEMPLATE = {
+    summary: "This issue requires targeted remediation for the failing rule.",
+    action: "Apply the fix required by this rule in your remediation tool, then keep the structural semantics consistent.",
+  };
   let loadingActionTimer = null;
   let loadingActionIndex = 0;
 
@@ -811,13 +852,16 @@
     issuesBody.innerHTML = sortedIssues.map((issue) => {
       const errorCount = getIssueFailedChecks(issue);
       return `
-        <tr>
+        <tr class="issue-main-row">
           <td>${errorCount}</td>
           <td>${escapeHtml(issue.severity || "")}</td>
           <td>${escapeHtml(issue.rule_id || "-")}</td>
-          <td>${escapeHtml(issue.message || "")}</td>
+          <td><div class="issue-message">${escapeHtml(issue.message || "")}</div></td>
           <td>${issue.page == null ? "-" : Number(issue.page)}</td>
           <td>${escapeHtml(formatIssueCategories(issue))}</td>
+        </tr>
+        <tr class="issue-fix-plan-row">
+          <td colspan="6">${renderIssueFixPlan(issue)}</td>
         </tr>
       `;
     }).join("");
@@ -828,6 +872,84 @@
   function getIssueFailedChecks(issue) {
     const failedChecks = parseNonNegativeInteger(issue && issue.failed_checks);
     return failedChecks == null ? 1 : failedChecks;
+  }
+
+  function renderIssueFixPlan(issue) {
+    const fixPlan = buildIssueFixPlan(issue);
+    const stepsHtml = fixPlan.steps
+      .map((step) => `<li>${escapeHtml(step)}</li>`)
+      .join("");
+
+    return `
+      <details class="issue-fix-plan">
+        <summary>Fix plan</summary>
+        <div class="issue-fix-plan-body">
+          <p>${escapeHtml(fixPlan.summary)}</p>
+          <ol class="issue-fix-steps">${stepsHtml}</ol>
+        </div>
+      </details>
+    `;
+  }
+
+  function buildIssueFixPlan(issue) {
+    const template = resolveFixPlanTemplate(issue);
+    const locatorStep = buildIssueLocatorStep(issue);
+    const ruleId = issue && issue.rule_id != null ? String(issue.rule_id).trim() : "";
+    const summary = ruleId
+      ? `${template.summary} Rule: ${ruleId}.`
+      : template.summary;
+
+    return {
+      summary,
+      steps: [
+        locatorStep,
+        template.action,
+      ],
+    };
+  }
+
+  function buildIssueLocatorStep(issue) {
+    const page = normalizePositivePageNumber(issue && issue.page);
+    const location = issue && issue.location != null ? String(issue.location).trim() : "";
+
+    if (page != null && location) {
+      return `Inspect page ${page} at location "${location}" and identify the failing object.`;
+    }
+    if (page != null) {
+      return `Inspect page ${page} and locate the failing object in the tag tree.`;
+    }
+    if (location) {
+      return `Inspect the reported location "${location}" and identify the failing object.`;
+    }
+    return "Locate the failing object in your PDF structure tree and object properties panel.";
+  }
+
+  function normalizePositivePageNumber(value) {
+    const parsedPage = parseNonNegativeInteger(value);
+    if (parsedPage == null || parsedPage <= 0) {
+      return null;
+    }
+    return parsedPage;
+  }
+
+  function resolveFixPlanTemplate(issue) {
+    const categories = getIssueCategories(issue);
+    const searchableParts = [
+      issue && issue.rule_id,
+      issue && issue.message,
+      issue && issue.location,
+      ...categories,
+    ];
+    const searchableText = searchableParts
+      .filter((part) => part != null && String(part).trim() !== "")
+      .join(" ");
+
+    for (const template of FIX_PLAN_TEMPLATES) {
+      if (template.pattern.test(searchableText)) {
+        return template;
+      }
+    }
+    return DEFAULT_FIX_PLAN_TEMPLATE;
   }
 
   function renderRaw(fragment, raw) {
