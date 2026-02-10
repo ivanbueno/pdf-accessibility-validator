@@ -1056,6 +1056,24 @@ button:disabled {
   gap: 1.05rem;
 }
 
+.faq-categories {
+  display: grid;
+  gap: 1.35rem;
+}
+
+.faq-category {
+  margin: 0;
+}
+
+.faq-category-title {
+  margin: 0 0 0.68rem;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.76rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--accent-secondary) 66%, var(--ink-soft));
+}
+
 .faq-item {
   margin: 0;
   padding: 0 0 1.05rem;

@@ -265,95 +265,141 @@
         </summary>
         <div class="collapsible-content faq-content">
           <img class="faq-mascot" src="./images/owl-professor.png" alt="" aria-hidden="true" />
-          <dl class="faq-list">
-          <div class="faq-item">
-            <dt>Who needs a PDF Accessibility Checker?</dt>
-            <dd>
-              This tool is built for:
-              <ul>
-                <li>Government agencies (Section 508 compliance)</li>
-                <li>Universities and educational institutions</li>
-                <li>Healthcare providers</li>
-                <li>Legal and financial services</li>
-                <li>SaaS platforms generating automated PDFs</li>
-                <li>Procurement and compliance teams</li>
-              </ul>
-              If you publish PDFs online, accessibility validation is essential.
-            </dd>
-          </div>
+          <div class="faq-categories">
+            <section class="faq-category" aria-labelledby="faq-category-use-cases">
+              <h3 class="faq-category-title" id="faq-category-use-cases">Use Cases</h3>
+              <dl class="faq-list">
+                <div class="faq-item">
+                  <dt>Who needs a PDF Accessibility Checker?</dt>
+                  <dd>
+                    This tool is built for:
+                    <ul>
+                      <li>Government agencies (Section 508 compliance)</li>
+                      <li>Universities and educational institutions</li>
+                      <li>Healthcare providers</li>
+                      <li>Legal and financial services</li>
+                      <li>SaaS platforms generating automated PDFs</li>
+                      <li>Procurement and compliance teams</li>
+                    </ul>
+                    If you publish PDFs online, accessibility validation is essential.
+                  </dd>
+                </div>
+              </dl>
+            </section>
 
-          <div class="faq-item">
-            <dt>What is the difference between PDF/UA and WCAG?</dt>
-            <dd>
-              PDF/UA focuses specifically on technical PDF structure. WCAG covers broader accessibility principles such as
-              contrast, navigation, and usability.
-            </dd>
-          </div>
+            <section class="faq-category" aria-labelledby="faq-category-standards-remediation">
+              <h3 class="faq-category-title" id="faq-category-standards-remediation">Standards &amp; Remediation</h3>
+              <dl class="faq-list">
+                <div class="faq-item">
+                  <dt>Can I use this for Section 508 compliance?</dt>
+                  <dd>Yes. PDF/UA validation supports Section 508 accessibility requirements.</dd>
+                </div>
 
-          <div class="faq-item">
-            <dt>Should I remediate to PDF/UA-1 or WCAG?</dt>
-            <dd>
-              <p>In most projects, aim for both. Use PDF/UA-1 to fix document-level tagging and structure issues, and use WCAG to
-              address user experience expectations and policy requirements. If you must prioritize, follow the standard your
-              contract, regulator, or client explicitly requires.</p>
-              <p>PDF/UA-1 conformance improves screen reader compatibility, creates more reliable keyboard navigation, and makes
-              document structure clearer for assistive technology users. It also reduces remediation rework, supports procurement
-              and compliance reviews, and provides a stronger baseline for Section 508 and broader accessibility programs.</p>
-            </dd>
-          </div>
+                <div class="faq-item">
+                  <dt>How do I choose a PDF accessibility remediation tool?</dt>
+                  <dd>
+                    <p>Choose a tool that can both find and fix accessibility issues, not just report them.</p>
+                    <p>Look for these capabilities:</p>
+                    <ul>
+                      <li>Support for both PDF/UA-1 and WCAG requirements</li>
+                      <li>Tag editing and reading-order correction</li>
+                      <li>Alt text authoring for meaningful images and decorative image handling</li>
+                      <li>Table and form remediation support</li>
+                      <li>Clear, actionable reports that map findings to fixes</li>
+                    </ul>
+                    <p>Also evaluate practical fit: whether it works best with source files or existing PDFs, supports batch processing for higher volume, and matches your team's skill level and budget.</p>
+                  </dd>
+                </div>
 
-          <div class="faq-item">
-            <dt>Is this powered by veraPDF?</dt>
-            <dd>
-              <p>Yes. Validation is powered by the open-source veraPDF engine for accurate standards-based testing. veraPDF is
-              an industry-standard validator supported by the Open Preservation Foundation and the PDF Association.</p>
-              <p>In <a href="https://pdfix.net/pdf-accessibility-validators/" target="_blank" rel="noopener noreferrer">published validator comparisons</a>,
-              veraPDF is often the strictest checker and can surface PDF/UA issues that PAC, Adobe Acrobat, and CommonLook
-              may miss.</p>
-            </dd>
-          </div>
+                <div class="faq-item">
+                  <dt>Should I remediate to PDF/UA-1 or WCAG?</dt>
+                  <dd>
+                    <p>In most projects, aim for both. Use PDF/UA-1 to fix document-level tagging and structure issues, and use WCAG to
+                    address user experience expectations and policy requirements. If you must prioritize, follow the standard your
+                    contract, regulator, or client explicitly requires.</p>
+                    <p>PDF/UA-1 conformance improves screen reader compatibility, creates more reliable keyboard navigation, and makes
+                    document structure clearer for assistive technology users. It also reduces remediation rework, supports procurement
+                    and compliance reviews, and provides a stronger baseline for Section 508 and broader accessibility programs.</p>
+                  </dd>
+                </div>
 
-          <div class="faq-item">
-            <dt>What technology stack powers this validator?</dt>
-            <dd>
-              The validator runs on a Python backend in an AWS Lambda container and uses the Java-based veraPDF CLI
-              for standards validation.
-            </dd>
-          </div>
+                <div class="faq-item">
+                  <dt>What does PDF remediation entail?</dt>
+                  <dd>
+                    <p>PDF remediation is the process of fixing accessibility barriers so assistive technologies can read and navigate a document reliably. Typical remediation work includes:</p>
+                    <ul>
+                      <li>Add proper tagging metadata (including a valid tag tree and role mapping)</li>
+                      <li>Add proper headings, paragraphs, lists, and table headers</li>
+                      <li>Fix the reading order</li>
+                      <li>Add clear alt text to meaningful images (mark decorative items as decorative)</li>
+                      <li>Label form fields correctly (if any)</li>
+                      <li>Set the document title and language</li>
+                    </ul>
+                  </dd>
+                </div>
 
-          <div class="faq-item">
-            <dt>Can I use this for Section 508 compliance?</dt>
-            <dd>Yes. PDF/UA validation supports Section 508 accessibility requirements.</dd>
-          </div>
+                <div class="faq-item">
+                  <dt>What is the difference between PDF/UA and WCAG?</dt>
+                  <dd>
+                    PDF/UA focuses specifically on technical PDF structure. WCAG covers broader accessibility principles such as
+                    contrast, navigation, and usability.
+                  </dd>
+                </div>
+              </dl>
+            </section>
 
-          <div class="faq-item">
-            <dt>Are there limitations to the free API?</dt>
-            <dd>
-              <p>
-                The free API is intended for evaluation, light development, and moderate usage. To ensure consistent
-                performance and availability for all users, it operates with managed rate limits and lower concurrency
-                thresholds.
-              </p>
-              <p>
-                Current size limits: web upload is capped at 3 MB per PDF, and direct API validation is capped at 10 MB
-                per PDF.
-              </p>
-              <p>
-                Organizations with higher validation volumes, production workloads, or batch-processing requirements may
-                benefit from a customized solution.
-              </p>
-            </dd>
-          </div>
+            <section class="faq-category" aria-labelledby="faq-category-platform-api">
+              <h3 class="faq-category-title" id="faq-category-platform-api">Platform &amp; API</h3>
+              <dl class="faq-list">
+                <div class="faq-item">
+                  <dt>Are there limitations to the free API?</dt>
+                  <dd>
+                    <p>
+                      The free API is intended for evaluation, light development, and moderate usage. To ensure consistent
+                      performance and availability for all users, it operates with managed rate limits and lower concurrency
+                      thresholds.
+                    </p>
+                    <p>
+                      Current size limits: web upload is capped at 3 MB per PDF, and direct API validation is capped at 10 MB
+                      per PDF.
+                    </p>
+                    <p>
+                      Organizations with higher validation volumes, production workloads, or batch-processing requirements may
+                      benefit from a customized solution.
+                    </p>
+                  </dd>
+                </div>
 
-          <div class="faq-item">
-            <dt>Do you store files, URLs, or validation results?</dt>
-            <dd>
-              No files, URLs, request payloads, or validation results are intentionally stored beyond transient processing
-              needed to complete a request. Submitted files are processed by AWS Lambda execution environments using
-              ephemeral storage and are discarded after execution, subject to AWS platform behavior.
-            </dd>
+                <div class="faq-item">
+                  <dt>Do you store files, URLs, or validation results?</dt>
+                  <dd>
+                    No files, URLs, request payloads, or validation results are intentionally stored beyond transient processing
+                    needed to complete a request. Submitted files are processed by AWS Lambda execution environments using
+                    ephemeral storage and are discarded after execution, subject to AWS platform behavior.
+                  </dd>
+                </div>
+
+                <div class="faq-item">
+                  <dt>Is this powered by veraPDF?</dt>
+                  <dd>
+                    <p>Yes. Validation is powered by the open-source veraPDF engine for accurate standards-based testing. veraPDF is
+                    an industry-standard validator supported by the Open Preservation Foundation and the PDF Association.</p>
+                    <p>In <a href="https://pdfix.net/pdf-accessibility-validators/" target="_blank" rel="noopener noreferrer">published validator comparisons</a>,
+                    veraPDF is often the strictest checker and can surface PDF/UA issues that PAC, Adobe Acrobat, and CommonLook
+                    may miss.</p>
+                  </dd>
+                </div>
+
+                <div class="faq-item">
+                  <dt>What technology stack powers this validator?</dt>
+                  <dd>
+                    The validator runs on a Python backend in an AWS Lambda container and uses the Java-based veraPDF CLI
+                    for standards validation.
+                  </dd>
+                </div>
+              </dl>
+            </section>
           </div>
-          </dl>
         </div>
       </details>
     </main>
