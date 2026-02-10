@@ -1571,6 +1571,83 @@ button:disabled {
   font-size: 0.78rem;
 }
 
+.metric-label-with-tooltip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  position: relative;
+}
+
+.metric-tooltip-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1rem;
+  height: 1rem;
+  border: 1px solid color-mix(in srgb, var(--accent-secondary) 34%, var(--line));
+  border-radius: 999px;
+  background: #fff;
+  color: color-mix(in srgb, var(--accent-secondary-strong) 72%, var(--ink-soft));
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1;
+  padding: 0;
+  box-shadow: none;
+  cursor: help;
+}
+
+.metric-tooltip-trigger:hover {
+  border-color: color-mix(in srgb, var(--accent-secondary) 48%, var(--line));
+  color: var(--accent-secondary-strong);
+}
+
+.metric-tooltip-trigger:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent-secondary) 52%, white);
+  outline-offset: 2px;
+}
+
+.metric-tooltip-text {
+  position: absolute;
+  top: calc(100% + 0.45rem);
+  left: 0;
+  width: min(22rem, 70vw);
+  padding: 0.45rem 0.55rem;
+  border: 1px solid color-mix(in srgb, var(--accent-secondary) 28%, #0f2734);
+  border-radius: 0.55rem;
+  background: color-mix(in srgb, #10222f 92%, var(--accent-secondary) 8%);
+  color: #fff;
+  font-size: 0.76rem;
+  line-height: 1.35;
+  box-shadow: 0 10px 22px rgba(6, 18, 28, 0.28);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-4px);
+  transition: opacity 0.14s ease, transform 0.14s ease, visibility 0.14s ease;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.metric-tooltip-text::before {
+  content: "";
+  position: absolute;
+  top: -0.36rem;
+  left: 0.7rem;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-left: 1px solid color-mix(in srgb, var(--accent-secondary) 28%, #0f2734);
+  border-top: 1px solid color-mix(in srgb, var(--accent-secondary) 28%, #0f2734);
+  background: color-mix(in srgb, #10222f 92%, var(--accent-secondary) 8%);
+  transform: rotate(45deg);
+}
+
+.metric-label-with-tooltip:hover .metric-tooltip-text,
+.metric-tooltip-trigger:focus + .metric-tooltip-text,
+.metric-tooltip-trigger:focus-visible + .metric-tooltip-text {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
 .metric-value {
   display: block;
   margin-top: 0.2rem;

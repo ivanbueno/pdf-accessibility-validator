@@ -373,7 +373,17 @@
 
         <div class="summary-grid">
           <div class="metric metric-compliance">
-            <span class="metric-label">Compliance Score</span>
+            <span class="metric-label metric-label-with-tooltip">
+              <span>Compliance Score</span>
+              <button
+                type="button"
+                class="metric-tooltip-trigger"
+                aria-label="How Compliance Score is calculated"
+              >?</button>
+              <span class="metric-tooltip-text" role="tooltip">
+                Score = (Passed Rules / Checked Rules) * 100. Passed Rules = Checked Rules - min(Failed Rules, Checked Rules). Shows n/a when checked rules is 0 or unavailable.
+              </span>
+            </span>
             <span class="metric-value metric-compliance-score"></span>
           </div>
           <div class="metric">

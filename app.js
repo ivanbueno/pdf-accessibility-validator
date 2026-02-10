@@ -2268,7 +2268,7 @@
 
     return `
       <details class="issue-fix-plan issue-rule-evidence">
-        <summary>Rule evidence</summary>
+        <summary>Details</summary>
         <div class="issue-fix-plan-body">
           ${factsHtml}
           ${entriesHtml}
