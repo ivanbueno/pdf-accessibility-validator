@@ -704,7 +704,7 @@
     }
 
     let totalCheckedRules = 0;
-    let totalFailedRules = 0;
+    let totalEffectiveFailedRules = 0;
     const fallbackScores = [];
 
     profiles.forEach((profile) => {
@@ -715,16 +715,12 @@
       const summary = profile.summary && typeof profile.summary === "object"
         ? profile.summary
         : {};
-      const checkedRules = parseNonNegativeInteger(
-        summary.checkedRules ?? summary.checked_rules,
-      );
-      const failedRules = parseNonNegativeInteger(
-        summary.failedRules ?? summary.failed_rules,
-      ) ?? 0;
+      const scoreInputs = getComplianceScoreInputs(summary);
+      const checkedRules = scoreInputs.checkedRules;
 
       if (checkedRules != null && checkedRules > 0) {
         totalCheckedRules += checkedRules;
-        totalFailedRules += Math.min(failedRules, checkedRules);
+        totalEffectiveFailedRules += Math.min(scoreInputs.effectiveFailedRules, checkedRules);
         return;
       }
 
@@ -735,8 +731,8 @@
     });
 
     if (totalCheckedRules > 0) {
-      const boundedFailedRules = Math.min(totalFailedRules, totalCheckedRules);
-      const passedRules = Math.max(0, totalCheckedRules - boundedFailedRules);
+      const boundedEffectiveFailedRules = Math.min(totalEffectiveFailedRules, totalCheckedRules);
+      const passedRules = Math.max(0, totalCheckedRules - boundedEffectiveFailedRules);
       const weightedScore = (passedRules / totalCheckedRules) * 100;
       return Math.max(0, Math.min(100, weightedScore));
     }
@@ -1867,21 +1863,32 @@
   }
 
   function computeProfileComplianceScore(summary) {
+    const scoreInputs = getComplianceScoreInputs(summary);
+    const checkedRules = scoreInputs.checkedRules;
+    if (checkedRules == null || checkedRules <= 0) {
+      return null;
+    }
+
+    const boundedEffectiveFailedRules = Math.min(scoreInputs.effectiveFailedRules, checkedRules);
+    const passedRules = Math.max(0, checkedRules - boundedEffectiveFailedRules);
+    const score = (passedRules / checkedRules) * 100;
+    return Math.max(0, Math.min(100, score));
+  }
+
+  function getComplianceScoreInputs(summary) {
     const checkedRules = parseNonNegativeInteger(
       summary && (summary.checked_rules ?? summary.checkedRules),
     );
     const failedRules = parseNonNegativeInteger(
       summary && (summary.failed_rules ?? summary.failedRules),
     ) ?? 0;
+    const errors = parseNonNegativeInteger(summary && summary.errors) ?? 0;
+    const additionalFailedChecks = Math.max(0, errors - failedRules);
 
-    if (checkedRules == null || checkedRules <= 0) {
-      return null;
-    }
-
-    const boundedFailedRules = Math.min(failedRules, checkedRules);
-    const passedRules = Math.max(0, checkedRules - boundedFailedRules);
-    const score = (passedRules / checkedRules) * 100;
-    return Math.max(0, Math.min(100, score));
+    return {
+      checkedRules,
+      effectiveFailedRules: failedRules + additionalFailedChecks,
+    };
   }
 
   function formatComplianceScore(score) {

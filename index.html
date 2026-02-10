@@ -381,7 +381,7 @@
                 aria-label="How Compliance Score is calculated"
               >?</button>
               <span class="metric-tooltip-text" role="tooltip">
-                Score = (Passed Rules / Checked Rules) * 100. Passed Rules = Checked Rules - min(Failed Rules, Checked Rules). Shows n/a when checked rules is 0 or unavailable.
+                Score = (Passed Rules / Checked Rules) * 100. Passed Rules = Checked Rules - min(max(Failed Rules, Errors), Checked Rules). Shows n/a when checked rules is 0 or unavailable.
               </span>
             </span>
             <span class="metric-value metric-compliance-score"></span>
