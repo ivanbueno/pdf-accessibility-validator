@@ -1239,6 +1239,58 @@ button:disabled {
   white-space: nowrap;
 }
 
+.run-delta-summary-title-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.run-delta-title-sparkline {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.12rem 0.34rem 0.12rem 0.28rem;
+  margin-right: 1rem;
+  border: none;
+  background: transparent;
+}
+
+.run-delta-sparkline {
+  width: 5.5rem;
+  height: 1rem;
+  display: block;
+}
+
+.run-delta-sparkline-track {
+  fill: none;
+  stroke: color-mix(in srgb, var(--accent-secondary) 24%, var(--line));
+  stroke-width: 1;
+  stroke-linecap: round;
+}
+
+.run-delta-sparkline-line {
+  fill: none;
+  stroke: var(--accent-secondary-strong);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.run-delta-sparkline-dot {
+  fill: var(--accent-strong);
+  stroke: #fff;
+  stroke-width: 0.9;
+}
+
+.run-delta-sparkline-value {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.67rem;
+  line-height: 1;
+  color: var(--accent-secondary-strong);
+  white-space: nowrap;
+}
+
 .run-delta-header-states {
   display: inline-flex;
   align-items: center;

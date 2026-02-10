@@ -645,6 +645,7 @@
 
   function buildRunDeltaModelFromHistory(runHistory, comparisonIndex) {
     const history = normalizeRunSnapshotHistory(runHistory);
+    const runComplianceSeries = buildRunComplianceSeries(history);
     if (history.length < 2) {
       const currentSnapshot = history.length ? history[history.length - 1] : null;
       const baseModel = buildRunDeltaModel(currentSnapshot, null);
@@ -657,6 +658,7 @@
         canGoOlder: false,
         canGoNewer: false,
         currentLabel: formatRunSnapshotReference(currentSnapshot),
+        runComplianceSeries,
       };
     }
 
@@ -676,7 +678,75 @@
       canGoNewer: boundedIndex < maxIndex,
       currentLabel: formatRunSnapshotReference(currentSnapshot),
       previousLabel: formatRunSnapshotReference(previousSnapshot),
+      runComplianceSeries,
     };
+  }
+
+  function buildRunComplianceSeries(runHistory) {
+    const history = normalizeRunSnapshotHistory(runHistory);
+    if (!history.length) {
+      return [];
+    }
+
+    return history.map((snapshot) => computeRunSnapshotComplianceScore(snapshot));
+  }
+
+  function computeRunSnapshotComplianceScore(snapshot) {
+    if (!snapshot || typeof snapshot !== "object") {
+      return null;
+    }
+
+    const profiles = snapshot.profiles && typeof snapshot.profiles === "object"
+      ? Object.values(snapshot.profiles)
+      : [];
+    if (!profiles.length) {
+      return null;
+    }
+
+    let totalCheckedRules = 0;
+    let totalFailedRules = 0;
+    const fallbackScores = [];
+
+    profiles.forEach((profile) => {
+      if (!profile || typeof profile !== "object") {
+        return;
+      }
+
+      const summary = profile.summary && typeof profile.summary === "object"
+        ? profile.summary
+        : {};
+      const checkedRules = parseNonNegativeInteger(
+        summary.checkedRules ?? summary.checked_rules,
+      );
+      const failedRules = parseNonNegativeInteger(
+        summary.failedRules ?? summary.failed_rules,
+      ) ?? 0;
+
+      if (checkedRules != null && checkedRules > 0) {
+        totalCheckedRules += checkedRules;
+        totalFailedRules += Math.min(failedRules, checkedRules);
+        return;
+      }
+
+      const complianceScore = computeProfileComplianceScore(summary);
+      if (Number.isFinite(complianceScore)) {
+        fallbackScores.push(complianceScore);
+      }
+    });
+
+    if (totalCheckedRules > 0) {
+      const boundedFailedRules = Math.min(totalFailedRules, totalCheckedRules);
+      const passedRules = Math.max(0, totalCheckedRules - boundedFailedRules);
+      const weightedScore = (passedRules / totalCheckedRules) * 100;
+      return Math.max(0, Math.min(100, weightedScore));
+    }
+
+    if (!fallbackScores.length) {
+      return null;
+    }
+
+    const averageScore = fallbackScores.reduce((sum, score) => sum + score, 0) / fallbackScores.length;
+    return Math.max(0, Math.min(100, averageScore));
   }
 
   function clampRunDeltaComparisonIndex(value, maxIndex) {
@@ -986,11 +1056,12 @@
   function renderRunDelta(deltaModel, options) {
     const shouldExpand = Boolean(options && options.expanded);
     const openAttribute = shouldExpand ? " open" : "";
+    const summaryTitleHtml = renderRunDeltaSummaryTitle(deltaModel);
     if (!deltaModel || !deltaModel.available) {
       return `
         <details class="run-delta run-delta-unavailable" aria-label="Track Record"${openAttribute}>
           <summary class="run-delta-summary">
-            <span class="run-delta-summary-title">Track Record</span>
+            ${summaryTitleHtml}
             <span class="run-delta-summary-toggle" aria-hidden="true"></span>
           </summary>
           <div class="run-delta-body">
@@ -1010,7 +1081,7 @@
     return `
       <details class="run-delta run-delta-${escapeHtml(deltaModel.state)}" aria-label="Track Record"${openAttribute}>
         <summary class="run-delta-summary">
-          <span class="run-delta-summary-title">Track Record</span>
+          ${summaryTitleHtml}
           ${headerStatesHtml}
           <span class="run-delta-summary-toggle" aria-hidden="true"></span>
         </summary>
@@ -1022,6 +1093,169 @@
         </div>
       </details>
     `;
+  }
+
+  function renderRunDeltaSummaryTitle(deltaModel) {
+    const sparklineHtml = renderRunDeltaSummarySparkline(deltaModel);
+    if (!sparklineHtml) {
+      return "<span class=\"run-delta-summary-title\">Track Record</span>";
+    }
+
+    return `
+      <span class="run-delta-summary-title-group">
+        <span class="run-delta-summary-title">Track Record</span>
+        ${sparklineHtml}
+      </span>
+    `;
+  }
+
+  function renderRunDeltaSummarySparkline(deltaModel) {
+    if (
+      !deltaModel
+      || !Number.isFinite(deltaModel.totalComparisons)
+      || deltaModel.totalComparisons <= 1
+    ) {
+      return "";
+    }
+
+    const runComplianceSeries = Array.isArray(deltaModel.runComplianceSeries)
+      ? deltaModel.runComplianceSeries
+      : [];
+    const sparklineModel = buildRunDeltaSparklineModel(runComplianceSeries);
+    if (!sparklineModel) {
+      return "";
+    }
+
+    const preferredIndex = Number.isFinite(deltaModel.comparisonIndex)
+      ? deltaModel.comparisonIndex
+      : runComplianceSeries.length - 1;
+    const boundedIndex = Math.max(0, Math.min(preferredIndex, runComplianceSeries.length - 1));
+    const selectedPoint = sparklineModel.points[boundedIndex];
+    const selectedScore = Number.isFinite(runComplianceSeries[boundedIndex])
+      ? runComplianceSeries[boundedIndex]
+      : null;
+    const selectedScoreLabel = formatComplianceScore(selectedScore);
+    const minScoreLabel = formatComplianceScore(sparklineModel.minScore);
+    const maxScoreLabel = formatComplianceScore(sparklineModel.maxScore);
+    const trendLabel = `Compliance score trend across ${runComplianceSeries.length} runs. Current: ${selectedScoreLabel}. Range: ${minScoreLabel} to ${maxScoreLabel}.`;
+
+    return `
+      <span class="run-delta-title-sparkline" role="img" aria-label="${escapeHtml(trendLabel)}">
+        <svg
+          class="run-delta-sparkline"
+          viewBox="0 0 ${sparklineModel.width} ${sparklineModel.height}"
+          aria-hidden="true"
+          focusable="false"
+        >
+          <path
+            class="run-delta-sparkline-track"
+            d="M ${sparklineModel.paddingX} ${sparklineModel.height - sparklineModel.paddingY} L ${sparklineModel.width - sparklineModel.paddingX} ${sparklineModel.height - sparklineModel.paddingY}"
+          ></path>
+          <path class="run-delta-sparkline-line" d="${sparklineModel.linePath}"></path>
+          ${selectedPoint
+            ? `<circle class="run-delta-sparkline-dot" cx="${formatSparklineCoordinate(selectedPoint.x)}" cy="${formatSparklineCoordinate(selectedPoint.y)}" r="1.9"></circle>`
+            : ""}
+        </svg>
+        <span class="run-delta-sparkline-value">${escapeHtml(selectedScoreLabel)}</span>
+      </span>
+    `;
+  }
+
+  function buildRunDeltaSparklineModel(scoreSeries) {
+    if (!Array.isArray(scoreSeries) || scoreSeries.length < 2) {
+      return null;
+    }
+
+    const numericScores = scoreSeries.filter((score) => Number.isFinite(score));
+    if (numericScores.length < 2) {
+      return null;
+    }
+
+    const width = 122;
+    const height = 24;
+    const paddingX = 2;
+    const paddingY = 3;
+    const innerWidth = Math.max(1, width - (paddingX * 2));
+    const innerHeight = Math.max(1, height - (paddingY * 2));
+    const minScore = Math.min(...numericScores);
+    const maxScore = Math.max(...numericScores);
+    const scoreRange = maxScore - minScore;
+    const step = scoreSeries.length > 1 ? innerWidth / (scoreSeries.length - 1) : 0;
+
+    const points = scoreSeries.map((score, index) => {
+      if (!Number.isFinite(score)) {
+        return null;
+      }
+
+      const x = paddingX + (step * index);
+      const y = scoreRange === 0
+        ? paddingY + (innerHeight / 2)
+        : paddingY + (((maxScore - score) / scoreRange) * innerHeight);
+
+      return {
+        x,
+        y,
+      };
+    });
+
+    const linePath = buildSparklinePathFromPoints(points);
+    if (!linePath) {
+      return null;
+    }
+
+    return {
+      width,
+      height,
+      paddingX,
+      paddingY,
+      points,
+      linePath,
+      minScore,
+      maxScore,
+    };
+  }
+
+  function buildSparklinePathFromPoints(points) {
+    if (!Array.isArray(points) || points.length === 0) {
+      return "";
+    }
+
+    const segments = [];
+    let currentSegment = [];
+
+    points.forEach((point) => {
+      if (!point) {
+        if (currentSegment.length > 0) {
+          segments.push(currentSegment);
+          currentSegment = [];
+        }
+        return;
+      }
+
+      currentSegment.push(point);
+    });
+
+    if (currentSegment.length > 0) {
+      segments.push(currentSegment);
+    }
+
+    return segments.map((segment) => {
+      if (!segment.length) {
+        return "";
+      }
+
+      return segment.map((point, index) => {
+        const command = index === 0 ? "M" : "L";
+        return `${command} ${formatSparklineCoordinate(point.x)} ${formatSparklineCoordinate(point.y)}`;
+      }).join(" ");
+    }).filter(Boolean).join(" ");
+  }
+
+  function formatSparklineCoordinate(value) {
+    if (!Number.isFinite(value)) {
+      return 0;
+    }
+    return Number.parseFloat(value.toFixed(2));
   }
 
   function renderRunDeltaHistoryNavigator(deltaModel) {
