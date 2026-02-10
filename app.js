@@ -30,6 +30,7 @@
   const RUN_DELTA_DEFAULT_KEY = "__default__";
   const RUN_TRACK_RECORD_MAX_HISTORY = 30;
   const RUN_PROFILE_ORDER = ["pdfua-1", "wcag-2-2-complete.xml"];
+  const COMPLIANCE_ERROR_WEIGHT = 0.5;
   const FIX_PLAN_TEMPLATES = [
     {
       pattern: /\b(metadata|xmp|title|language|lang|viewer|displaydoctitle)\b/i,
@@ -1884,10 +1885,11 @@
     ) ?? 0;
     const errors = parseNonNegativeInteger(summary && summary.errors) ?? 0;
     const additionalFailedChecks = Math.max(0, errors - failedRules);
+    const weightedAdditionalFailedChecks = additionalFailedChecks * COMPLIANCE_ERROR_WEIGHT;
 
     return {
       checkedRules,
-      effectiveFailedRules: failedRules + additionalFailedChecks,
+      effectiveFailedRules: failedRules + weightedAdditionalFailedChecks,
     };
   }
 
