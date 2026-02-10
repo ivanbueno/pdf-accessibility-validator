@@ -2234,7 +2234,7 @@
               data-category="${escapeHtml(name)}"
               aria-pressed="${isActive}"
             >
-              ${escapeHtml(label)} <strong>(${count})</strong>
+              ${escapeHtml(label)} <span class="category-chip-count">(${count})</span>
             </button>
           </li>
         `;
