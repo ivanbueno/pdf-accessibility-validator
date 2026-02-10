@@ -549,10 +549,11 @@
       badge.textContent = profileResult.passed ? "Pass" : "Fail";
       badge.classList.add(profileResult.passed ? "pass" : "fail");
 
+      const complianceScore = computeProfileComplianceScore(summary);
+      fragment.querySelector(".metric-compliance-score").textContent = formatComplianceScore(complianceScore);
       fragment.querySelector(".metric-errors").textContent = String(summary.errors ?? 0);
       fragment.querySelector(".metric-failed-rules").textContent = String(summary.failed_rules ?? 0);
       fragment.querySelector(".metric-checked-rules").textContent = summary.checked_rules == null ? "n/a" : String(summary.checked_rules);
-      fragment.querySelector(".metric-duration").textContent = `${summary.duration_ms ?? 0} ms`;
 
       const renderRoot = profileCard || fragment;
       renderProfileIssues(renderRoot, issues);
@@ -818,6 +819,7 @@
       errorsDelta: summaryDelta ? summaryDelta.errorsDelta : null,
       failedRulesDelta: summaryDelta ? summaryDelta.failedRulesDelta : null,
       checkedRulesDelta: summaryDelta ? summaryDelta.checkedRulesDelta : null,
+      complianceScoreDelta: summaryDelta ? summaryDelta.complianceScoreDelta : null,
       newIssues: issueDelta.newIssues,
       resolvedIssues: issueDelta.resolvedIssues,
       unchangedIssues: issueDelta.unchangedIssues,
@@ -839,6 +841,8 @@
     const previousCheckedRules = parseNonNegativeInteger(
       previousSummary && (previousSummary.checkedRules ?? previousSummary.checked_rules),
     );
+    const currentComplianceScore = computeProfileComplianceScore(currentSummary);
+    const previousComplianceScore = computeProfileComplianceScore(previousSummary);
 
     return {
       errorsDelta: currentErrors - previousErrors,
@@ -846,6 +850,9 @@
       checkedRulesDelta: currentCheckedRules == null || previousCheckedRules == null
         ? null
         : currentCheckedRules - previousCheckedRules,
+      complianceScoreDelta: currentComplianceScore == null || previousComplianceScore == null
+        ? null
+        : roundDelta(currentComplianceScore - previousComplianceScore, 1),
     };
   }
 
@@ -1129,6 +1136,7 @@
           ${renderRunDeltaMetric("Errors", profileDelta.errorsDelta, { direction: "down" })}
           ${renderRunDeltaMetric("Failed rules", profileDelta.failedRulesDelta, { direction: "down" })}
           ${renderRunDeltaMetric("Checked rules", profileDelta.checkedRulesDelta, { direction: "neutral" })}
+          ${renderRunDeltaMetric("Compliance score", profileDelta.complianceScoreDelta, { direction: "up", suffix: "%" })}
           ${renderRunDeltaMetric("New issues", profileDelta.newIssues, { direction: "down", showSign: false })}
           ${renderRunDeltaMetric("Resolved issues", profileDelta.resolvedIssues, { direction: "up", showSign: false })}
           ${renderRunDeltaMetric("Unchanged issues", profileDelta.unchangedIssues, { direction: "neutral", showSign: false })}
@@ -1174,6 +1182,16 @@
 
     const prefix = showSign && value > 0 ? "+" : "";
     return `${prefix}${value}${suffix || ""}`;
+  }
+
+  function roundDelta(value, decimalPlaces) {
+    if (!Number.isFinite(value)) {
+      return null;
+    }
+
+    const factor = 10 ** Math.max(0, decimalPlaces || 0);
+    const rounded = Math.round(value * factor) / factor;
+    return Object.is(rounded, -0) ? 0 : rounded;
   }
 
   function getDeltaBadgeClass(state) {
@@ -1612,6 +1630,36 @@
 
     const fallbackFailedChecks = parseNonNegativeInteger(fallbackCount);
     return fallbackFailedChecks;
+  }
+
+  function computeProfileComplianceScore(summary) {
+    const checkedRules = parseNonNegativeInteger(
+      summary && (summary.checked_rules ?? summary.checkedRules),
+    );
+    const failedRules = parseNonNegativeInteger(
+      summary && (summary.failed_rules ?? summary.failedRules),
+    ) ?? 0;
+
+    if (checkedRules == null || checkedRules <= 0) {
+      return null;
+    }
+
+    const boundedFailedRules = Math.min(failedRules, checkedRules);
+    const passedRules = Math.max(0, checkedRules - boundedFailedRules);
+    const score = (passedRules / checkedRules) * 100;
+    return Math.max(0, Math.min(100, score));
+  }
+
+  function formatComplianceScore(score) {
+    if (!Number.isFinite(score)) {
+      return "n/a";
+    }
+
+    const rounded = Math.round(score * 10) / 10;
+    if (Number.isInteger(rounded)) {
+      return `${rounded}%`;
+    }
+    return `${rounded.toFixed(1)}%`;
   }
 
   function parseNonNegativeInteger(value) {

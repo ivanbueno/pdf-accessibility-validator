@@ -1490,6 +1490,11 @@ button:disabled {
   background: var(--bg-soft);
 }
 
+.metric.metric-compliance .metric-value {
+  font-weight: 700;
+  font-size: 1.08rem;
+}
+
 .profile-card.profile-pass .metric {
   border-color: color-mix(in srgb, var(--ok) 28%, var(--line));
   background: color-mix(in srgb, var(--ok) 8%, #ffffff);
@@ -1498,6 +1503,14 @@ button:disabled {
 .profile-card.profile-fail .metric {
   border-color: color-mix(in srgb, var(--fail) 28%, var(--line));
   background: color-mix(in srgb, var(--fail) 8%, #ffffff);
+}
+
+.profile-card.profile-pass .metric.metric-compliance .metric-value {
+  color: var(--ok);
+}
+
+.profile-card.profile-fail .metric.metric-compliance .metric-value {
+  color: var(--fail);
 }
 
 .metric-label {
