@@ -24,6 +24,8 @@
     "Finalizing PDF/UA-1 and WCAG profile results...",
   ];
   const LOADING_INTERVAL_MS = 1600;
+  const UNCATEGORIZED_CATEGORY = "__uncategorized__";
+  const UNCATEGORIZED_CATEGORY_LABEL = "uncategorized";
   let loadingActionTimer = null;
   let loadingActionIndex = 0;
 
@@ -39,7 +41,6 @@
   const apiBaseUrlDisplay = document.getElementById("api-base-url-display");
   const postExample = document.getElementById("post-example");
   const getExample = document.getElementById("get-example");
-  const copyButtons = Array.from(document.querySelectorAll(".copy-icon-btn"));
   const uploadMode = document.getElementById("upload-mode");
   const urlMode = document.getElementById("url-mode");
   const inputModeField = document.getElementById("input-mode");
@@ -59,8 +60,18 @@
     });
     tab.addEventListener("keydown", handleModeTabKeydown);
   });
-  copyButtons.forEach((button) => {
-    button.addEventListener("click", () => copyExample(button));
+  document.addEventListener("click", (event) => {
+    const target = event.target;
+    if (!(target instanceof Element)) {
+      return;
+    }
+
+    const button = target.closest(".copy-icon-btn");
+    if (!button) {
+      return;
+    }
+
+    copyExample(button);
   });
 
   form.addEventListener("submit", async (event) => {
@@ -401,10 +412,10 @@
       fragment.querySelector(".metric-checked-rules").textContent = summary.checked_rules == null ? "n/a" : String(summary.checked_rules);
       fragment.querySelector(".metric-duration").textContent = `${summary.duration_ms ?? 0} ms`;
 
-      const issues = Array.isArray(profileResult.issues) ? profileResult.issues : [];
-      renderBreakdown(fragment, issues);
-      renderIssues(fragment, issues);
-      renderRaw(fragment, profileResult.raw);
+      const renderRoot = profileCard || fragment;
+      const issues = normalizeIssuesForDisplay(profileResult);
+      renderProfileIssues(renderRoot, issues);
+      renderRaw(renderRoot, profileResult.raw);
 
       profileGrid.appendChild(fragment);
     });
@@ -428,39 +439,395 @@
     resultPanel.classList.add("result-enter");
   }
 
-  function renderBreakdown(fragment, issues) {
-    const severityList = fragment.querySelector(".severity-list");
-    const categoryList = fragment.querySelector(".category-list");
-
-    const severityCounts = countBy(issues, (issue) => issue.severity || "unknown");
-    const categoryCounts = countBy(issues, (issue) => issue.category || "uncategorized");
-
-    severityList.innerHTML = buildChipList(severityCounts);
-    categoryList.innerHTML = buildChipList(categoryCounts);
+  function normalizeIssuesForDisplay(profileResult) {
+    const issues = Array.isArray(profileResult.issues) ? profileResult.issues : [];
+    if (!issues.length) {
+      return issues;
+    }
+    return enrichIssuesFromRawXml(issues, profileResult.raw);
   }
 
-  function renderIssues(fragment, issues) {
-    const issuesBody = fragment.querySelector(".issues-body");
-    const details = fragment.querySelector(".issues-details");
+  function enrichIssuesFromRawXml(issues, raw) {
+    const ruleDataByRuleId = extractRuleDataFromRaw(raw);
+    const ruleEntryCursorByRuleId = new Map();
 
-    if (!issues.length) {
-      issuesBody.innerHTML = '<tr><td colspan="5">No issues found for this profile.</td></tr>';
+    return issues.map((issue) => {
+      let hasChanges = false;
+      const normalizedIssue = { ...issue };
+      if (normalizedIssue.page == null) {
+        const derivedPage = extractPageNumber(normalizedIssue.location || normalizedIssue.message);
+        if (derivedPage != null) {
+          normalizedIssue.page = derivedPage;
+          hasChanges = true;
+        }
+      }
+
+      const ruleId = issue && issue.rule_id != null ? String(issue.rule_id) : "";
+      const ruleData = ruleDataByRuleId.get(ruleId);
+      if (!ruleData) {
+        return hasChanges ? normalizedIssue : issue;
+      }
+
+      const matchedEntry = matchRawEntryForIssue(
+        issue,
+        ruleId,
+        ruleData.entries,
+        ruleEntryCursorByRuleId,
+      );
+
+      const existingTags = [];
+      if (Array.isArray(issue.tags)) {
+        existingTags.push(...issue.tags);
+      } else if (issue.tags != null) {
+        existingTags.push(issue.tags);
+      }
+
+      const mergedTags = dedupeCategoryValues([...existingTags, ...ruleData.tags]);
+      if (mergedTags.length) {
+        normalizedIssue.tags = mergedTags;
+        hasChanges = true;
+        if (!normalizedIssue.category) {
+          normalizedIssue.category = mergedTags[0];
+        }
+      }
+
+      if (normalizedIssue.page == null && matchedEntry && matchedEntry.page != null) {
+        normalizedIssue.page = matchedEntry.page;
+        hasChanges = true;
+      }
+
+      if (!normalizedIssue.location && matchedEntry && matchedEntry.location) {
+        normalizedIssue.location = matchedEntry.location;
+        hasChanges = true;
+      }
+
+      if (ruleData.failedChecks != null && normalizedIssue.failed_checks !== ruleData.failedChecks) {
+        normalizedIssue.failed_checks = ruleData.failedChecks;
+        hasChanges = true;
+      }
+
+      return hasChanges ? normalizedIssue : issue;
+    });
+  }
+
+  function matchRawEntryForIssue(issue, ruleId, entries, cursorByRuleId) {
+    if (!Array.isArray(entries) || !entries.length) {
+      return null;
+    }
+
+    const startIndex = cursorByRuleId.get(ruleId) || 0;
+    const issueLocation = issue && issue.location != null ? String(issue.location).trim() : "";
+    const issueMessage = issue && issue.message != null ? String(issue.message).trim() : "";
+
+    let matchIndex = -1;
+    if (issueLocation) {
+      matchIndex = findEntryIndex(entries, startIndex, (entry) => entry.location === issueLocation);
+    }
+    if (matchIndex < 0 && issueMessage) {
+      matchIndex = findEntryIndex(entries, startIndex, (entry) => entry.message === issueMessage);
+    }
+    if (matchIndex < 0 && startIndex < entries.length) {
+      matchIndex = startIndex;
+    }
+    if (matchIndex < 0) {
+      return null;
+    }
+
+    cursorByRuleId.set(ruleId, matchIndex + 1);
+    return entries[matchIndex];
+  }
+
+  function findEntryIndex(entries, startIndex, predicate) {
+    for (let index = startIndex; index < entries.length; index += 1) {
+      if (predicate(entries[index])) {
+        return index;
+      }
+    }
+    return -1;
+  }
+
+  function extractRuleDataFromRaw(raw) {
+    if (typeof raw !== "string" || raw.indexOf("<rule") === -1 || typeof DOMParser !== "function") {
+      return new Map();
+    }
+
+    let xmlDoc;
+    try {
+      xmlDoc = new DOMParser().parseFromString(raw, "application/xml");
+    } catch (_error) {
+      return new Map();
+    }
+
+    if (!xmlDoc || xmlDoc.getElementsByTagName("parsererror").length > 0) {
+      return new Map();
+    }
+
+    const ruleDataByRuleId = new Map();
+    const ruleNodes = Array.from(xmlDoc.getElementsByTagName("rule"));
+
+    ruleNodes.forEach((ruleNode) => {
+      const ruleId = buildRuleIdFromXmlRule(ruleNode);
+      if (!ruleId) {
+        return;
+      }
+
+      const ruleTags = splitCategoryValue(ruleNode.getAttribute("tags"));
+      const failedEntries = extractFailedEntriesFromRuleNode(ruleNode);
+      const failedChecks = extractFailedChecksFromRuleNode(ruleNode, failedEntries.length);
+
+      const existing = ruleDataByRuleId.get(ruleId) || { tags: [], entries: [], failedChecks: null };
+      const mergedTags = dedupeCategoryValues([...existing.tags, ...ruleTags]);
+      const mergedEntries = [...existing.entries, ...failedEntries];
+      const mergedFailedChecks = sumNullableCounts(existing.failedChecks, failedChecks);
+
+      if (!mergedTags.length && !mergedEntries.length && mergedFailedChecks == null) {
+        return;
+      }
+
+      ruleDataByRuleId.set(ruleId, {
+        tags: mergedTags,
+        entries: mergedEntries,
+        failedChecks: mergedFailedChecks,
+      });
+    });
+
+    return ruleDataByRuleId;
+  }
+
+  function buildRuleIdFromXmlRule(ruleNode) {
+    const explicitRuleId = ruleNode.getAttribute("ruleId") || ruleNode.getAttribute("id");
+    if (explicitRuleId) {
+      return explicitRuleId;
+    }
+
+    const parts = [
+      ruleNode.getAttribute("specification"),
+      ruleNode.getAttribute("clause"),
+      ruleNode.getAttribute("testNumber"),
+    ].filter((part) => part && String(part).trim());
+
+    if (!parts.length) {
+      return null;
+    }
+    return parts.join(":");
+  }
+
+  function extractFailedEntriesFromRuleNode(ruleNode) {
+    const assertionNodes = getFailedDescendantsByTagName(ruleNode, "assertion");
+    const checkNodes = getFailedDescendantsByTagName(ruleNode, "check");
+    const entryNodes = assertionNodes.length ? assertionNodes : checkNodes;
+    if (!entryNodes.length) {
+      return [];
+    }
+
+    const fallbackMessage = (
+      getFirstDirectChildText(ruleNode, "description")
+      || getFirstDirectChildText(ruleNode, "test")
+      || "veraPDF rule failed"
+    );
+    const fallbackLocation = getFirstDirectChildText(ruleNode, "object");
+
+    return entryNodes.map((entryNode) => {
+      const location = (
+        getFirstDirectChildText(entryNode, "context")
+        || getFirstDirectChildText(entryNode, "location")
+        || fallbackLocation
+        || null
+      );
+      const message = (
+        getFirstDirectChildText(entryNode, "errorMessage")
+        || getFirstDirectChildText(entryNode, "message")
+        || getFirstDirectChildText(entryNode, "description")
+        || fallbackMessage
+      );
+
+      return {
+        location,
+        message,
+        page: extractPageNumber(location || message),
+      };
+    });
+  }
+
+  function extractFailedChecksFromRuleNode(ruleNode, fallbackCount) {
+    const explicitFailedChecks = parseNonNegativeInteger(ruleNode.getAttribute("failedChecks"));
+    if (explicitFailedChecks != null) {
+      return explicitFailedChecks;
+    }
+
+    const fallbackFailedChecks = parseNonNegativeInteger(fallbackCount);
+    return fallbackFailedChecks;
+  }
+
+  function parseNonNegativeInteger(value) {
+    if (value == null || value === "") {
+      return null;
+    }
+
+    const parsed = Number.parseInt(String(value), 10);
+    if (!Number.isFinite(parsed) || parsed < 0) {
+      return null;
+    }
+    return parsed;
+  }
+
+  function sumNullableCounts(first, second) {
+    if (first == null) {
+      return second;
+    }
+    if (second == null) {
+      return first;
+    }
+    return first + second;
+  }
+
+  function getFailedDescendantsByTagName(element, tagName) {
+    const failedNodes = [];
+    const nodes = Array.from(element.getElementsByTagName(tagName));
+
+    nodes.forEach((node) => {
+      const status = ((node.getAttribute("status") || "failed")).trim().toLowerCase();
+      if (status === "failed") {
+        failedNodes.push(node);
+      }
+    });
+
+    return failedNodes;
+  }
+
+  function getFirstDirectChildText(element, tagName) {
+    const normalizedTagName = String(tagName).toLowerCase();
+    const children = Array.from(element.children || []);
+
+    for (const child of children) {
+      const childName = String(child.localName || child.nodeName || "").toLowerCase();
+      if (childName !== normalizedTagName) {
+        continue;
+      }
+
+      const text = String(child.textContent || "").trim();
+      if (text) {
+        return text;
+      }
+    }
+
+    return null;
+  }
+
+  function extractPageNumber(text) {
+    if (text == null) {
+      return null;
+    }
+
+    const normalizedText = String(text);
+    const pageMatch = normalizedText.match(/\bpage\s*(\d+)\b/i);
+    if (pageMatch) {
+      const explicitPage = Number.parseInt(pageMatch[1], 10);
+      return Number.isFinite(explicitPage) && explicitPage > 0 ? explicitPage : null;
+    }
+
+    const indexedPageMatch = normalizedText.match(/\bpages?\[(\d+)\]/i);
+    if (!indexedPageMatch) {
+      return null;
+    }
+
+    const zeroBasedPage = Number.parseInt(indexedPageMatch[1], 10);
+    if (!Number.isFinite(zeroBasedPage) || zeroBasedPage < 0) {
+      return null;
+    }
+    return zeroBasedPage + 1;
+  }
+
+  function renderProfileIssues(renderRoot, issues) {
+    const categoryList = renderRoot.querySelector(".category-list");
+    let activeCategory = null;
+
+    const rerender = () => {
+      renderBreakdown(renderRoot, issues, activeCategory);
+      renderIssues(
+        renderRoot,
+        filterIssuesByCategory(issues, activeCategory),
+        activeCategory,
+      );
+    };
+
+    if (categoryList) {
+      categoryList.addEventListener("click", (event) => {
+        const target = event.target;
+        if (!(target instanceof Element)) {
+          return;
+        }
+
+        const chip = target.closest(".category-chip");
+        if (!chip || !categoryList.contains(chip)) {
+          return;
+        }
+
+        const nextCategory = chip.dataset.category || null;
+        activeCategory = activeCategory === nextCategory ? null : nextCategory;
+        rerender();
+      });
+    }
+
+    rerender();
+  }
+
+  function renderBreakdown(renderRoot, issues, activeCategory) {
+    const categoryList = renderRoot.querySelector(".category-list");
+    if (!categoryList) {
       return;
     }
 
-    issuesBody.innerHTML = issues.map((issue) => {
+    const categoryCounts = countByMany(
+      issues,
+      (issue) => getIssueCategories(issue),
+      UNCATEGORIZED_CATEGORY,
+    );
+
+    categoryList.innerHTML = buildChipList(categoryCounts, activeCategory);
+  }
+
+  function renderIssues(renderRoot, issues, activeCategory) {
+    const issuesBody = renderRoot.querySelector(".issues-body");
+    const details = renderRoot.querySelector(".issues-details");
+    if (!issuesBody || !details) {
+      return;
+    }
+
+    if (!issues.length) {
+      const categoryLabel = activeCategory == null ? null : getCategoryLabel(activeCategory);
+      const filterMessage = activeCategory == null
+        ? " for this profile"
+        : ` for category "${escapeHtml(categoryLabel)}"`;
+      issuesBody.innerHTML = `<tr><td colspan="6">No issues found${filterMessage}.</td></tr>`;
+      details.open = true;
+      return;
+    }
+
+    const sortedIssues = [...issues].sort((left, right) => {
+      return getIssueFailedChecks(right) - getIssueFailedChecks(left);
+    });
+
+    issuesBody.innerHTML = sortedIssues.map((issue) => {
+      const errorCount = getIssueFailedChecks(issue);
       return `
         <tr>
+          <td>${errorCount}</td>
           <td>${escapeHtml(issue.severity || "")}</td>
           <td>${escapeHtml(issue.rule_id || "-")}</td>
           <td>${escapeHtml(issue.message || "")}</td>
           <td>${issue.page == null ? "-" : Number(issue.page)}</td>
-          <td>${escapeHtml(issue.category || "-")}</td>
+          <td>${escapeHtml(formatIssueCategories(issue))}</td>
         </tr>
       `;
     }).join("");
 
     details.open = true;
+  }
+
+  function getIssueFailedChecks(issue) {
+    const failedChecks = parseNonNegativeInteger(issue && issue.failed_checks);
+    return failedChecks == null ? 1 : failedChecks;
   }
 
   function renderRaw(fragment, raw) {
@@ -475,24 +842,131 @@
     rawPre.textContent = typeof raw === "string" ? raw : JSON.stringify(raw, null, 2);
   }
 
-  function buildChipList(counts) {
+  function buildChipList(counts, activeCategory) {
     const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
     if (!entries.length) {
       return "<li>none</li>";
     }
 
     return entries
-      .map(([name, count]) => `<li>${escapeHtml(name)}: <strong>${count}</strong></li>`)
+      .map(([name, count]) => {
+        const label = getCategoryLabel(name);
+        const isActive = activeCategory === name;
+        const classes = isActive ? "category-chip is-active" : "category-chip";
+        return `
+          <li>
+            <button
+              type="button"
+              class="${classes}"
+              data-category="${escapeHtml(name)}"
+              aria-pressed="${isActive}"
+            >
+              ${escapeHtml(label)}: <strong>${count}</strong>
+            </button>
+          </li>
+        `;
+      })
       .join("");
   }
 
-  function countBy(items, getKey) {
-    const counts = {};
-    for (const item of items) {
-      const key = String(getKey(item));
-      counts[key] = (counts[key] || 0) + 1;
+  function getCategoryLabel(category) {
+    if (category === UNCATEGORIZED_CATEGORY) {
+      return UNCATEGORIZED_CATEGORY_LABEL;
     }
+    return category;
+  }
+
+  function filterIssuesByCategory(issues, category) {
+    if (category == null) {
+      return issues;
+    }
+    return issues.filter((issue) => issueMatchesCategory(issue, category));
+  }
+
+  function issueMatchesCategory(issue, category) {
+    const categories = getIssueCategories(issue);
+    if (category === UNCATEGORIZED_CATEGORY) {
+      return categories.length === 0;
+    }
+    return categories.includes(category);
+  }
+
+  function countByMany(items, getKeys, emptyKey) {
+    const counts = {};
+
+    for (const item of items) {
+      const keys = getKeys(item);
+      if (!Array.isArray(keys) || !keys.length) {
+        const fallbackKey = String(emptyKey);
+        counts[fallbackKey] = (counts[fallbackKey] || 0) + 1;
+        continue;
+      }
+
+      for (const key of keys) {
+        const normalizedKey = String(key);
+        counts[normalizedKey] = (counts[normalizedKey] || 0) + 1;
+      }
+    }
+
     return counts;
+  }
+
+  function formatIssueCategories(issue) {
+    const categories = getIssueCategories(issue);
+    if (!categories.length) {
+      return "-";
+    }
+    return categories.join(", ");
+  }
+
+  function getIssueCategories(issue) {
+    const categoryValues = [];
+
+    if (Array.isArray(issue.tags)) {
+      categoryValues.push(...issue.tags);
+    } else if (issue.tags != null) {
+      categoryValues.push(issue.tags);
+    }
+
+    if (Array.isArray(issue.category)) {
+      categoryValues.push(...issue.category);
+    } else if (issue.category != null) {
+      categoryValues.push(issue.category);
+    }
+    return dedupeCategoryValues(categoryValues);
+  }
+
+  function splitCategoryValue(value) {
+    if (value == null) {
+      return [];
+    }
+
+    if (typeof value === "string") {
+      return value
+        .split(/[;,|]+/)
+        .map((part) => part.trim())
+        .filter(Boolean);
+    }
+
+    const normalized = String(value).trim();
+    return normalized ? [normalized] : [];
+  }
+
+  function dedupeCategoryValues(values) {
+    const categories = [];
+    const seen = new Set();
+
+    values
+      .flatMap(splitCategoryValue)
+      .forEach((value) => {
+        if (!value || seen.has(value)) {
+          return;
+        }
+        seen.add(value);
+        categories.push(value);
+      });
+
+    return categories;
   }
 
   function setSubmitting(isSubmitting, message) {
@@ -587,15 +1061,12 @@
   }
 
   async function copyExample(button) {
-    const targetId = button.dataset.copyTarget;
-    if (!targetId) {
+    const copyTarget = resolveCopyTarget(button);
+    if (!copyTarget) {
       return;
     }
 
-    const source = document.getElementById(targetId);
-    if (!source) {
-      return;
-    }
+    const { source, targetName } = copyTarget;
 
     const text = source.textContent || "";
     if (!text.trim()) {
@@ -606,11 +1077,38 @@
       await copyText(text);
       flashCopiedState(button);
       trackEvent("copy_to_clipboard", {
-        target: targetId,
+        target: targetName,
       });
     } catch (_error) {
       showError("Could not copy to clipboard in this browser context.");
     }
+  }
+
+  function resolveCopyTarget(button) {
+    const targetId = String(button.dataset.copyTarget || "").trim();
+    if (targetId) {
+      const source = document.getElementById(targetId);
+      return source ? { source, targetName: targetId } : null;
+    }
+
+    const sourceSelector = String(button.dataset.copySelector || "").trim();
+    if (!sourceSelector) {
+      return null;
+    }
+
+    const scopeSelector = String(button.dataset.copyScope || "").trim();
+    const scope = scopeSelector ? button.closest(scopeSelector) : button.parentElement;
+    if (!scope) {
+      return null;
+    }
+
+    const source = scope.querySelector(sourceSelector);
+    if (!source) {
+      return null;
+    }
+
+    const targetName = String(button.dataset.copyEventTarget || sourceSelector);
+    return { source, targetName };
   }
 
   function initAnalytics(measurementId) {

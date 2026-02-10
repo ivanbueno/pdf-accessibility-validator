@@ -380,10 +380,6 @@
 
         <div class="breakdown-grid">
           <section>
-            <h4>By Severity</h4>
-            <ul class="chip-list severity-list"></ul>
-          </section>
-          <section>
             <h4>By Category</h4>
             <ul class="chip-list category-list"></ul>
           </section>
@@ -395,6 +391,7 @@
             <table class="issues-table">
               <thead>
                 <tr>
+                  <th># Errors</th>
                   <th>Severity</th>
                   <th>Rule</th>
                   <th>Message</th>
@@ -409,6 +406,22 @@
 
         <details class="raw-details">
           <summary>Raw Output</summary>
+          <div class="raw-actions">
+            <button
+              type="button"
+              class="copy-icon-btn"
+              data-copy-scope=".raw-details"
+              data-copy-selector=".raw-pre"
+              data-copy-event-target="raw-output"
+              aria-label="Copy raw output to clipboard"
+              title="Copy raw output to clipboard"
+            >
+              <svg viewBox="0 0 24 24" role="img" aria-label="Copy to Clipboard">
+                <path d="M9 9h11v11H9z"></path>
+                <path d="M4 4h11v11H4z"></path>
+              </svg>
+            </button>
+          </div>
           <pre class="raw-pre"></pre>
         </details>
       </article>

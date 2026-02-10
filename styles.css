@@ -1259,12 +1259,6 @@ button:disabled {
   grid-template-columns: 1fr;
 }
 
-@media (min-width: 650px) {
-  .breakdown-grid {
-    grid-template-columns: 1fr 1fr;
-  }
-}
-
 .breakdown-grid h4 {
   margin: 0 0 0.4rem;
   font-size: 0.9rem;
@@ -1280,11 +1274,41 @@ button:disabled {
 }
 
 .chip-list li {
+  margin: 0;
+}
+
+.category-chip {
+  appearance: none;
   border: 1px solid var(--line);
   border-radius: 999px;
   padding: 0.2rem 0.55rem;
   font-size: 0.82rem;
+  font: inherit;
+  line-height: 1.2;
+  color: inherit;
   background: #fff;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease, color 0.15s ease;
+}
+
+.category-chip:hover {
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--line));
+  background: color-mix(in srgb, var(--accent) 8%, #fff);
+}
+
+.category-chip:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent-secondary) 65%, #fff);
+  outline-offset: 2px;
+}
+
+.category-chip.is-active {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--line));
+  background: color-mix(in srgb, var(--accent) 16%, #fff);
+  color: var(--accent-strong);
+}
+
+.category-chip strong {
+  font-weight: 700;
 }
 
 details {
@@ -1336,6 +1360,16 @@ summary {
   line-height: 1.35;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.raw-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.45rem;
+}
+
+.raw-actions .copy-icon-btn {
+  margin: 0;
 }
 
 @media (prefers-reduced-motion: reduce) {
