@@ -1253,15 +1253,15 @@ button:disabled {
 }
 
 .breakdown-grid {
-  margin-top: 0.8rem;
+  margin-top: 1.2rem;
+  margin-bottom: 1.13rem;
   display: grid;
   gap: 0.7rem;
   grid-template-columns: 1fr;
 }
 
-.breakdown-grid h4 {
-  margin: 0 0 0.4rem;
-  font-size: 0.9rem;
+.breakdown-grid + details {
+  margin-top: 0;
 }
 
 .chip-list {
@@ -1311,6 +1311,31 @@ button:disabled {
   font-weight: 700;
 }
 
+.issue-category-pills {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.issue-category-pills li {
+  margin: 0;
+}
+
+.issue-category-pill {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid color-mix(in srgb, var(--accent-secondary) 20%, var(--line));
+  border-radius: 999px;
+  padding: 0.15rem 0.5rem;
+  background: color-mix(in srgb, var(--accent-secondary) 8%, #fff);
+  color: color-mix(in srgb, var(--accent-secondary-strong) 55%, var(--ink));
+  font-size: 0.75rem;
+  line-height: 1.2;
+}
+
 details {
   margin-top: 0.75rem;
 }
@@ -1335,7 +1360,7 @@ summary {
 .issues-table td {
   border-bottom: 1px solid var(--line);
   text-align: left;
-  padding: 0.45rem;
+  padding: 0.55rem;
   vertical-align: top;
   font-size: 0.85rem;
 }
@@ -1347,34 +1372,68 @@ summary {
   letter-spacing: 0.05em;
 }
 
+.issues-table .issue-stripe-a td {
+  background: color-mix(in srgb, var(--bg-soft) 46%, #fff);
+}
+
+.issues-table .issue-stripe-b td {
+  background: color-mix(in srgb, var(--accent-secondary) 5%, #fff);
+}
+
+.profile-card.profile-pass .issues-table .issue-stripe-a td {
+  background: color-mix(in srgb, var(--ok) 4%, #fff);
+}
+
+.profile-card.profile-pass .issues-table .issue-stripe-b td {
+  background: color-mix(in srgb, var(--ok) 10%, #fff);
+}
+
+.profile-card.profile-fail .issues-table .issue-stripe-a td {
+  background: color-mix(in srgb, var(--fail) 4%, #fff);
+}
+
+.profile-card.profile-fail .issues-table .issue-stripe-b td {
+  background: color-mix(in srgb, var(--fail) 10%, #fff);
+}
+
 .issue-message {
   margin: 0;
+  font-size: 0.96rem;
+  line-height: 1.5;
 }
 
 .issues-table .issue-main-row td {
   border-bottom: 0;
+  padding-bottom: 0.3rem;
+}
+
+.issues-table .issue-message-row td {
+  padding: 0.25rem 0.55rem 0.8rem;
+  border-bottom: 0;
 }
 
 .issues-table .issue-fix-plan-row td {
-  padding: 0 0.45rem 0.55rem;
+  padding: 0 0.55rem 0.72rem;
   border-bottom: 1px solid var(--line);
+}
+
+.issues-table .issue-gap-row td {
+  padding: 0;
+  height: 0.6rem;
+  border-bottom: 0;
+  background: transparent;
 }
 
 .issue-fix-plan {
   margin-top: 0;
-  border: 0;
+  border: 1px dotted color-mix(in srgb, var(--line) 68%, #fff);
   border-radius: 0;
-  background: color-mix(in srgb, var(--accent-secondary) 5%, #fff);
-  box-shadow:
-    0 6px 14px rgba(24, 21, 17, 0.09),
-    0 1px 2px rgba(24, 21, 17, 0.05);
-  transition: box-shadow 0.18s ease;
+  background: transparent;
+  box-shadow: none;
 }
 
 .issue-fix-plan:hover {
-  box-shadow:
-    0 8px 18px rgba(24, 21, 17, 0.15),
-    0 2px 4px rgba(24, 21, 17, 0.08);
+  box-shadow: none;
 }
 
 .issue-fix-plan > summary {

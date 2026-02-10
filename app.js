@@ -840,7 +840,7 @@
       const filterMessage = activeCategory == null
         ? " for this profile"
         : ` for category "${escapeHtml(categoryLabel)}"`;
-      issuesBody.innerHTML = `<tr><td colspan="6">No issues found${filterMessage}.</td></tr>`;
+      issuesBody.innerHTML = `<tr><td colspan="5">No issues found${filterMessage}.</td></tr>`;
       details.open = true;
       return;
     }
@@ -849,20 +849,31 @@
       return getIssueFailedChecks(right) - getIssueFailedChecks(left);
     });
 
-    issuesBody.innerHTML = sortedIssues.map((issue) => {
+    issuesBody.innerHTML = sortedIssues.map((issue, index) => {
       const errorCount = getIssueFailedChecks(issue);
+      const isLastIssue = index === sortedIssues.length - 1;
+      const stripeClass = index % 2 === 0 ? "issue-stripe-a" : "issue-stripe-b";
       return `
-        <tr class="issue-main-row">
+        <tr class="issue-main-row ${stripeClass}">
           <td>${errorCount}</td>
           <td>${escapeHtml(issue.severity || "")}</td>
           <td>${escapeHtml(issue.rule_id || "-")}</td>
-          <td><div class="issue-message">${escapeHtml(issue.message || "")}</div></td>
           <td>${issue.page == null ? "-" : Number(issue.page)}</td>
-          <td>${escapeHtml(formatIssueCategories(issue))}</td>
+          <td>${renderIssueCategoryPills(issue)}</td>
         </tr>
-        <tr class="issue-fix-plan-row">
-          <td colspan="6">${renderIssueFixPlan(issue)}</td>
+        <tr class="issue-message-row ${stripeClass}">
+          <td colspan="5">
+            <div class="issue-message">${escapeHtml(issue.message || "")}</div>
+          </td>
         </tr>
+        <tr class="issue-fix-plan-row ${stripeClass}">
+          <td colspan="5">${renderIssueFixPlan(issue)}</td>
+        </tr>
+        ${isLastIssue ? "" : `
+        <tr class="issue-gap-row" aria-hidden="true">
+          <td colspan="5"></td>
+        </tr>
+        `}
       `;
     }).join("");
 
@@ -983,7 +994,7 @@
               data-category="${escapeHtml(name)}"
               aria-pressed="${isActive}"
             >
-              ${escapeHtml(label)}: <strong>${count}</strong>
+              ${escapeHtml(label)} <strong>(${count})</strong>
             </button>
           </li>
         `;
@@ -1033,12 +1044,17 @@
     return counts;
   }
 
-  function formatIssueCategories(issue) {
+  function renderIssueCategoryPills(issue) {
     const categories = getIssueCategories(issue);
     if (!categories.length) {
       return "-";
     }
-    return categories.join(", ");
+
+    return `
+      <ul class="issue-category-pills" aria-label="Issue categories">
+        ${categories.map((category) => `<li><span class="issue-category-pill">${escapeHtml(category)}</span></li>`).join("")}
+      </ul>
+    `;
   }
 
   function getIssueCategories(issue) {
