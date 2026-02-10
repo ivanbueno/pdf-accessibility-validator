@@ -26,6 +26,10 @@
   const LOADING_INTERVAL_MS = 1600;
   const UNCATEGORIZED_CATEGORY = "__uncategorized__";
   const UNCATEGORIZED_CATEGORY_LABEL = "uncategorized";
+  const RUN_DELTA_STORAGE_KEY = "pdf-audit.run-snapshot.v1";
+  const RUN_DELTA_DEFAULT_KEY = "__default__";
+  const RUN_TRACK_RECORD_MAX_HISTORY = 30;
+  const RUN_PROFILE_ORDER = ["pdfua-1", "wcag-2-2-complete.xml"];
   const FIX_PLAN_TEMPLATES = [
     {
       pattern: /\b(metadata|xmp|title|language|lang|viewer|displaydoctitle)\b/i,
@@ -90,6 +94,9 @@
   const uploadDropzone = document.getElementById("upload-dropzone");
   const uploadDropHint = document.getElementById("upload-drop-hint");
   let pendingUploadFile = null;
+  let runSnapshotStore = loadRunSnapshotStoreFromStorage();
+  let activeRunDeltaKey = RUN_DELTA_DEFAULT_KEY;
+  let activeRunDeltaComparisonIndex = 0;
 
   initAnalytics(APP_CONFIG.gaMeasurementId);
   setupUploadDropzone();
@@ -107,6 +114,12 @@
       return;
     }
 
+    const runDeltaNavButton = target.closest(".run-delta-nav-btn");
+    if (runDeltaNavButton) {
+      handleRunDeltaNavigation(runDeltaNavButton);
+      return;
+    }
+
     const button = target.closest(".copy-icon-btn");
     if (!button) {
       return;
@@ -120,6 +133,7 @@
     clearOutput();
 
     const selectedMode = getSelectedMode();
+    const runDeltaContext = buildRunDeltaContext(selectedMode);
     const lambdaBaseUrl = normalizeLambdaBaseUrl(APP_CONFIG.apiBaseUrl);
 
     if (!lambdaBaseUrl) {
@@ -138,7 +152,7 @@
         ? await runFileValidation(validateUrl)
         : await runUrlValidation(validateUrl);
 
-      renderResponse(response);
+      renderResponse(response, runDeltaContext);
       trackEvent("validate_request_succeeded", {
         input_mode: selectedMode,
         overall_pass: Boolean(response.passed),
@@ -220,6 +234,81 @@
 
   function getSelectedMode() {
     return inputModeField.value || "upload";
+  }
+
+  function buildRunDeltaContext(mode) {
+    if (mode === "upload") {
+      const uploadFile = getSelectedUploadFile();
+      const uploadName = normalizeOptionalText(uploadFile && uploadFile.name);
+      if (!uploadName) {
+        return {
+          key: RUN_DELTA_DEFAULT_KEY,
+          label: "upload",
+        };
+      }
+      return {
+        key: buildRunDeltaDocumentKey(uploadName),
+        label: uploadName,
+      };
+    }
+
+    const rawUrl = normalizeOptionalText(pdfUrlInput.value);
+    if (!rawUrl) {
+      return {
+        key: RUN_DELTA_DEFAULT_KEY,
+        label: "url",
+      };
+    }
+
+    const urlFilename = extractFilenameFromUrl(rawUrl);
+    const label = urlFilename || rawUrl;
+    return {
+      key: buildRunDeltaDocumentKey(label),
+      label,
+    };
+  }
+
+  function buildRunDeltaDocumentKey(value) {
+    const token = normalizeRunDeltaKeyToken(value);
+    return token || RUN_DELTA_DEFAULT_KEY;
+  }
+
+  function normalizeRunDeltaKeyToken(value) {
+    const normalized = normalizeOptionalText(value);
+    if (!normalized) {
+      return "";
+    }
+    return normalized.toLowerCase();
+  }
+
+  function extractFilenameFromUrl(value) {
+    try {
+      const url = new URL(value);
+      return extractFilenameFromPath(url.pathname);
+    } catch (_error) {
+      return extractFilenameFromPath(value);
+    }
+  }
+
+  function extractFilenameFromPath(value) {
+    const normalized = normalizeOptionalText(value);
+    if (!normalized) {
+      return "";
+    }
+
+    const path = normalized.split("?")[0].split("#")[0];
+    const segments = path.split("/").filter(Boolean);
+    if (!segments.length) {
+      return "";
+    }
+
+    const tail = segments[segments.length - 1];
+    try {
+      const decoded = decodeURIComponent(tail);
+      return normalizeOptionalText(decoded) || "";
+    } catch (_error) {
+      return tail;
+    }
   }
 
   async function runFileValidation(validateUrl) {
@@ -399,13 +488,30 @@
     return payload;
   }
 
-  function renderResponse(data) {
+  function renderResponse(data, runDeltaContext) {
     errorPanel.classList.add("hidden");
 
     const overallState = getOverallResultState(data);
     const overallBadgeClass = overallState;
     const overallBadgeText = `Overall: ${overallState.charAt(0).toUpperCase()}${overallState.slice(1)}`;
     const resultStateClass = `result-${overallState}`;
+    const sortedResults = [...(data.results || [])].sort(compareProfileResultsByPreferredOrder);
+    const normalizedResults = sortedResults.map((profileResult) => {
+      return {
+        profileResult,
+        issues: normalizeIssuesForDisplay(profileResult),
+      };
+    });
+    const runDeltaKey = runDeltaContext && runDeltaContext.key
+      ? runDeltaContext.key
+      : RUN_DELTA_DEFAULT_KEY;
+    const currentRunSnapshot = buildRunSnapshot(data, normalizedResults, runDeltaContext);
+    const existingRunHistory = getRunHistoryByDocumentKey(runSnapshotStore, runDeltaKey);
+    const nextRunHistory = appendRunSnapshotToHistory(existingRunHistory, currentRunSnapshot);
+
+    activeRunDeltaKey = runDeltaKey;
+    activeRunDeltaComparisonIndex = nextRunHistory.length >= 2 ? nextRunHistory.length - 1 : 0;
+    const runDeltaModel = buildRunDeltaModelFromHistory(nextRunHistory, activeRunDeltaComparisonIndex);
 
     const headerHtml = `
       <div class="result-header">
@@ -414,6 +520,7 @@
           <span class="badge overall-badge ${overallBadgeClass}">${overallBadgeText}</span>
         </div>
       </div>
+      ${renderRunDelta(runDeltaModel)}
       <div class="profile-grid" id="profile-grid"></div>
       <p class="result-meta">${escapeHtml(data.disclaimer || "")}</p>
     `;
@@ -425,13 +532,7 @@
     animateResultPanel();
 
     const profileGrid = document.getElementById("profile-grid");
-    const profileOrder = ["pdfua-1", "wcag-2-2-complete.xml"];
-
-    const sortedResults = [...(data.results || [])].sort((a, b) => {
-      return profileOrder.indexOf(a.profile) - profileOrder.indexOf(b.profile);
-    });
-
-    sortedResults.forEach((profileResult) => {
+    normalizedResults.forEach(({ profileResult, issues }) => {
       const fragment = profileTemplate.content.cloneNode(true);
 
       const profileCard = fragment.querySelector(".profile-card");
@@ -454,12 +555,788 @@
       fragment.querySelector(".metric-duration").textContent = `${summary.duration_ms ?? 0} ms`;
 
       const renderRoot = profileCard || fragment;
-      const issues = normalizeIssuesForDisplay(profileResult);
       renderProfileIssues(renderRoot, issues);
       renderRaw(renderRoot, profileResult.raw);
 
       profileGrid.appendChild(fragment);
     });
+
+    runSnapshotStore[runDeltaKey] = nextRunHistory;
+    saveRunSnapshotStoreToStorage(runSnapshotStore);
+  }
+
+  function compareProfileResultsByPreferredOrder(left, right) {
+    const leftProfile = left && left.profile ? String(left.profile) : "";
+    const rightProfile = right && right.profile ? String(right.profile) : "";
+    return compareProfileNamesByPreferredOrder(leftProfile, rightProfile);
+  }
+
+  function compareProfileNamesByPreferredOrder(leftProfile, rightProfile) {
+    const leftIndex = RUN_PROFILE_ORDER.indexOf(leftProfile);
+    const rightIndex = RUN_PROFILE_ORDER.indexOf(rightProfile);
+
+    if (leftIndex >= 0 || rightIndex >= 0) {
+      if (leftIndex < 0) {
+        return 1;
+      }
+      if (rightIndex < 0) {
+        return -1;
+      }
+      return leftIndex - rightIndex;
+    }
+
+    return leftProfile.localeCompare(rightProfile);
+  }
+
+  function buildRunSnapshot(data, normalizedResults, runDeltaContext) {
+    const profiles = {};
+    const runDeltaKey = runDeltaContext && runDeltaContext.key
+      ? runDeltaContext.key
+      : RUN_DELTA_DEFAULT_KEY;
+    const runDeltaLabel = runDeltaContext && runDeltaContext.label
+      ? String(runDeltaContext.label)
+      : runDeltaKey;
+
+    normalizedResults.forEach(({ profileResult, issues }) => {
+      const profileName = profileResult && profileResult.profile != null
+        ? String(profileResult.profile)
+        : "";
+      if (!profileName) {
+        return;
+      }
+      profiles[profileName] = buildRunSnapshotProfile(profileResult, issues);
+    });
+
+    return {
+      documentKey: runDeltaKey,
+      documentLabel: runDeltaLabel,
+      requestId: normalizeOptionalText(data && data.request_id),
+      runAt: new Date().toISOString(),
+      passed: Boolean(data && data.passed),
+      profiles,
+    };
+  }
+
+  function getRunHistoryByDocumentKey(snapshotStore, documentKey) {
+    if (!snapshotStore || typeof snapshotStore !== "object") {
+      return [];
+    }
+
+    if (!documentKey || typeof documentKey !== "string") {
+      return [];
+    }
+
+    return normalizeRunSnapshotHistory(snapshotStore[documentKey]);
+  }
+
+  function appendRunSnapshotToHistory(runHistory, snapshot) {
+    if (!isRunSnapshotRecord(snapshot)) {
+      return normalizeRunSnapshotHistory(runHistory);
+    }
+
+    const normalizedHistory = normalizeRunSnapshotHistory(runHistory);
+    const nextHistory = [...normalizedHistory, snapshot];
+    if (nextHistory.length <= RUN_TRACK_RECORD_MAX_HISTORY) {
+      return nextHistory;
+    }
+    return nextHistory.slice(nextHistory.length - RUN_TRACK_RECORD_MAX_HISTORY);
+  }
+
+  function buildRunDeltaModelFromHistory(runHistory, comparisonIndex) {
+    const history = normalizeRunSnapshotHistory(runHistory);
+    if (history.length < 2) {
+      const currentSnapshot = history.length ? history[history.length - 1] : null;
+      const baseModel = buildRunDeltaModel(currentSnapshot, null);
+      return {
+        ...baseModel,
+        historyLength: history.length,
+        totalComparisons: Math.max(0, history.length - 1),
+        comparisonIndex: 0,
+        comparisonNumber: 0,
+        canGoOlder: false,
+        canGoNewer: false,
+        currentLabel: formatRunSnapshotReference(currentSnapshot),
+      };
+    }
+
+    const maxIndex = history.length - 1;
+    const boundedIndex = clampRunDeltaComparisonIndex(comparisonIndex, maxIndex);
+    const currentSnapshot = history[boundedIndex];
+    const previousSnapshot = history[boundedIndex - 1];
+    const baseModel = buildRunDeltaModel(currentSnapshot, previousSnapshot);
+
+    return {
+      ...baseModel,
+      historyLength: history.length,
+      totalComparisons: maxIndex,
+      comparisonIndex: boundedIndex,
+      comparisonNumber: boundedIndex,
+      canGoOlder: boundedIndex > 1,
+      canGoNewer: boundedIndex < maxIndex,
+      currentLabel: formatRunSnapshotReference(currentSnapshot),
+      previousLabel: formatRunSnapshotReference(previousSnapshot),
+    };
+  }
+
+  function clampRunDeltaComparisonIndex(value, maxIndex) {
+    const parsed = Number.parseInt(String(value), 10);
+    if (!Number.isFinite(parsed)) {
+      return maxIndex;
+    }
+    if (parsed < 1) {
+      return 1;
+    }
+    if (parsed > maxIndex) {
+      return maxIndex;
+    }
+    return parsed;
+  }
+
+  function buildRunSnapshotProfile(profileResult, issues) {
+    const summary = profileResult && profileResult.summary && typeof profileResult.summary === "object"
+      ? profileResult.summary
+      : {};
+
+    return {
+      passed: Boolean(profileResult && profileResult.passed),
+      summary: {
+        errors: parseNonNegativeInteger(summary.errors) ?? 0,
+        failedRules: parseNonNegativeInteger(summary.failed_rules) ?? 0,
+        checkedRules: parseNonNegativeInteger(summary.checked_rules),
+        durationMs: parseNonNegativeInteger(summary.duration_ms) ?? 0,
+      },
+      issueKeys: buildRunIssueKeys(issues),
+    };
+  }
+
+  function buildRunIssueKeys(issues) {
+    if (!Array.isArray(issues) || !issues.length) {
+      return [];
+    }
+
+    const keys = [];
+    const seen = new Set();
+
+    issues.forEach((issue) => {
+      const key = buildIssueFingerprint(issue);
+      if (!key || seen.has(key)) {
+        return;
+      }
+
+      seen.add(key);
+      keys.push(key);
+    });
+
+    return keys;
+  }
+
+  function buildIssueFingerprint(issue) {
+    if (!issue || typeof issue !== "object") {
+      return null;
+    }
+
+    const severity = normalizeOptionalText(issue.severity) || "error";
+    const ruleId = normalizeOptionalText(issue.rule_id) || "-";
+    const page = normalizePositivePageNumber(issue.page);
+    const location = normalizeOptionalText(issue.location) || "";
+    const message = normalizeOptionalText(issue.message) || "";
+
+    return [
+      severity.toLowerCase(),
+      ruleId.toLowerCase(),
+      page == null ? "-" : String(page),
+      location.toLowerCase(),
+      message.toLowerCase(),
+    ].join("|");
+  }
+
+  function buildRunDeltaModel(currentSnapshot, previousSnapshot) {
+    const currentProfiles = currentSnapshot && currentSnapshot.profiles && typeof currentSnapshot.profiles === "object"
+      ? currentSnapshot.profiles
+      : {};
+    const previousProfiles = previousSnapshot && previousSnapshot.profiles && typeof previousSnapshot.profiles === "object"
+      ? previousSnapshot.profiles
+      : null;
+    const currentProfileNames = Object.keys(currentProfiles).sort(compareProfileNamesByPreferredOrder);
+
+    if (!previousProfiles) {
+      return {
+        available: false,
+        state: "unavailable",
+        documentKey: normalizeOptionalText(currentSnapshot && currentSnapshot.documentKey),
+        documentLabel: normalizeOptionalText(currentSnapshot && currentSnapshot.documentLabel),
+      };
+    }
+
+    const profileDeltas = currentProfileNames.map((profileName) => {
+      return buildProfileDelta(profileName, currentProfiles[profileName], previousProfiles[profileName] || null);
+    }).filter(Boolean);
+
+    return {
+      available: true,
+      state: classifyRunDeltaState(profileDeltas),
+      previousLabel: formatRunSnapshotReference(previousSnapshot),
+      documentKey: normalizeOptionalText(currentSnapshot && currentSnapshot.documentKey),
+      documentLabel: normalizeOptionalText(
+        (currentSnapshot && currentSnapshot.documentLabel)
+        || (previousSnapshot && previousSnapshot.documentLabel),
+      ),
+      profiles: profileDeltas,
+    };
+  }
+
+  function buildProfileDelta(profile, currentProfile, previousProfile) {
+    if (!currentProfile || typeof currentProfile !== "object") {
+      return null;
+    }
+
+    const hasBaseline = Boolean(previousProfile && typeof previousProfile === "object");
+    const summaryDelta = hasBaseline
+      ? buildSummaryDelta(currentProfile.summary, previousProfile.summary)
+      : null;
+    const issueDelta = hasBaseline
+      ? diffIssueKeys(currentProfile.issueKeys, previousProfile.issueKeys)
+      : {
+        newIssues: 0,
+        resolvedIssues: 0,
+        unchangedIssues: Array.isArray(currentProfile.issueKeys) ? currentProfile.issueKeys.length : 0,
+      };
+
+    return {
+      profile,
+      hasBaseline,
+      state: hasBaseline
+        ? classifyProfileDeltaState({
+          errorsDelta: summaryDelta.errorsDelta,
+          failedRulesDelta: summaryDelta.failedRulesDelta,
+          newIssues: issueDelta.newIssues,
+          resolvedIssues: issueDelta.resolvedIssues,
+        })
+        : "new",
+      currentPassed: Boolean(currentProfile.passed),
+      previousPassed: hasBaseline ? Boolean(previousProfile.passed) : null,
+      errorsDelta: summaryDelta ? summaryDelta.errorsDelta : null,
+      failedRulesDelta: summaryDelta ? summaryDelta.failedRulesDelta : null,
+      checkedRulesDelta: summaryDelta ? summaryDelta.checkedRulesDelta : null,
+      newIssues: issueDelta.newIssues,
+      resolvedIssues: issueDelta.resolvedIssues,
+      unchangedIssues: issueDelta.unchangedIssues,
+    };
+  }
+
+  function buildSummaryDelta(currentSummary, previousSummary) {
+    const currentErrors = parseNonNegativeInteger(currentSummary && currentSummary.errors) ?? 0;
+    const previousErrors = parseNonNegativeInteger(previousSummary && previousSummary.errors) ?? 0;
+    const currentFailedRules = parseNonNegativeInteger(
+      currentSummary && (currentSummary.failedRules ?? currentSummary.failed_rules),
+    ) ?? 0;
+    const previousFailedRules = parseNonNegativeInteger(
+      previousSummary && (previousSummary.failedRules ?? previousSummary.failed_rules),
+    ) ?? 0;
+    const currentCheckedRules = parseNonNegativeInteger(
+      currentSummary && (currentSummary.checkedRules ?? currentSummary.checked_rules),
+    );
+    const previousCheckedRules = parseNonNegativeInteger(
+      previousSummary && (previousSummary.checkedRules ?? previousSummary.checked_rules),
+    );
+
+    return {
+      errorsDelta: currentErrors - previousErrors,
+      failedRulesDelta: currentFailedRules - previousFailedRules,
+      checkedRulesDelta: currentCheckedRules == null || previousCheckedRules == null
+        ? null
+        : currentCheckedRules - previousCheckedRules,
+    };
+  }
+
+  function diffIssueKeys(currentIssueKeys, previousIssueKeys) {
+    const currentSet = new Set(Array.isArray(currentIssueKeys) ? currentIssueKeys : []);
+    const previousSet = new Set(Array.isArray(previousIssueKeys) ? previousIssueKeys : []);
+    let newIssues = 0;
+    let resolvedIssues = 0;
+
+    currentSet.forEach((issueKey) => {
+      if (!previousSet.has(issueKey)) {
+        newIssues += 1;
+      }
+    });
+
+    previousSet.forEach((issueKey) => {
+      if (!currentSet.has(issueKey)) {
+        resolvedIssues += 1;
+      }
+    });
+
+    return {
+      newIssues,
+      resolvedIssues,
+      unchangedIssues: Math.max(0, currentSet.size - newIssues),
+    };
+  }
+
+  function classifyProfileDeltaState(delta) {
+    const errorsDelta = delta && Number.isFinite(delta.errorsDelta) ? delta.errorsDelta : 0;
+    const failedRulesDelta = delta && Number.isFinite(delta.failedRulesDelta) ? delta.failedRulesDelta : 0;
+    const newIssues = delta && Number.isFinite(delta.newIssues) ? delta.newIssues : 0;
+    const resolvedIssues = delta && Number.isFinite(delta.resolvedIssues) ? delta.resolvedIssues : 0;
+
+    const improvementScore = Math.max(0, -errorsDelta) + Math.max(0, -failedRulesDelta) + Math.max(0, resolvedIssues);
+    const regressionScore = Math.max(0, errorsDelta) + Math.max(0, failedRulesDelta) + Math.max(0, newIssues);
+
+    if (improvementScore === 0 && regressionScore === 0) {
+      return "unchanged";
+    }
+    if (improvementScore > regressionScore) {
+      return "improved";
+    }
+    if (regressionScore > improvementScore) {
+      return "regressed";
+    }
+    return "mixed";
+  }
+
+  function classifyRunDeltaState(profileDeltas) {
+    let improvedCount = 0;
+    let regressedCount = 0;
+    let mixedCount = 0;
+
+    profileDeltas.forEach((profileDelta) => {
+      if (!profileDelta || !profileDelta.hasBaseline) {
+        return;
+      }
+      if (profileDelta.state === "improved") {
+        improvedCount += 1;
+        return;
+      }
+      if (profileDelta.state === "regressed") {
+        regressedCount += 1;
+        return;
+      }
+      if (profileDelta.state === "mixed") {
+        mixedCount += 1;
+      }
+    });
+
+    if (regressedCount > 0 && improvedCount === 0 && mixedCount === 0) {
+      return "regressed";
+    }
+    if (improvedCount > 0 && regressedCount === 0 && mixedCount === 0) {
+      return "improved";
+    }
+    if (regressedCount === 0 && improvedCount === 0 && mixedCount === 0) {
+      return "unchanged";
+    }
+    return "mixed";
+  }
+
+  function handleRunDeltaNavigation(button) {
+    if (!(button instanceof HTMLElement)) {
+      return;
+    }
+
+    const direction = String(button.dataset.direction || "").toLowerCase();
+    const runHistory = getRunHistoryByDocumentKey(runSnapshotStore, activeRunDeltaKey);
+    if (!runHistory.length) {
+      return;
+    }
+
+    const maxIndex = runHistory.length - 1;
+    if (maxIndex < 1) {
+      return;
+    }
+
+    if (direction === "older" && activeRunDeltaComparisonIndex > 1) {
+      activeRunDeltaComparisonIndex -= 1;
+    } else if (direction === "newer" && activeRunDeltaComparisonIndex < maxIndex) {
+      activeRunDeltaComparisonIndex += 1;
+    } else {
+      return;
+    }
+
+    rerenderRunDeltaSection({ expanded: true });
+  }
+
+  function rerenderRunDeltaSection(options) {
+    const runDeltaElement = resultPanel.querySelector(".run-delta");
+    if (!runDeltaElement) {
+      return;
+    }
+
+    const runHistory = getRunHistoryByDocumentKey(runSnapshotStore, activeRunDeltaKey);
+    const runDeltaModel = buildRunDeltaModelFromHistory(runHistory, activeRunDeltaComparisonIndex);
+    activeRunDeltaComparisonIndex = runDeltaModel && Number.isFinite(runDeltaModel.comparisonIndex)
+      ? runDeltaModel.comparisonIndex
+      : activeRunDeltaComparisonIndex;
+
+    const shouldExpand = options && typeof options.expanded === "boolean"
+      ? options.expanded
+      : runDeltaElement.hasAttribute("open");
+    runDeltaElement.outerHTML = renderRunDelta(runDeltaModel, {
+      expanded: shouldExpand,
+    });
+  }
+
+  function renderRunDelta(deltaModel, options) {
+    const shouldExpand = Boolean(options && options.expanded);
+    const openAttribute = shouldExpand ? " open" : "";
+    if (!deltaModel || !deltaModel.available) {
+      return `
+        <details class="run-delta run-delta-unavailable" aria-label="Track Record"${openAttribute}>
+          <summary class="run-delta-summary">
+            <span class="run-delta-summary-title">Track Record</span>
+            <span class="run-delta-summary-toggle" aria-hidden="true"></span>
+          </summary>
+          <div class="run-delta-body">
+            <p class="run-delta-note">Run validation again with the same document to compare against the previous run.</p>
+          </div>
+        </details>
+      `;
+    }
+
+    const trackRecordProfiles = getTrackRecordProfiles(deltaModel.profiles);
+    const profileCardsHtml = trackRecordProfiles.length
+      ? trackRecordProfiles.map((profileDelta) => renderRunDeltaProfile(profileDelta)).join("")
+      : "<p class=\"run-delta-note\">No comparable profiles were found.</p>";
+    const headerStatesHtml = renderRunDeltaHeaderStates(trackRecordProfiles);
+    const historyNavigatorHtml = renderRunDeltaHistoryNavigator(deltaModel);
+
+    return `
+      <details class="run-delta run-delta-${escapeHtml(deltaModel.state)}" aria-label="Track Record"${openAttribute}>
+        <summary class="run-delta-summary">
+          <span class="run-delta-summary-title">Track Record</span>
+          ${headerStatesHtml}
+          <span class="run-delta-summary-toggle" aria-hidden="true"></span>
+        </summary>
+        <div class="run-delta-body">
+          ${historyNavigatorHtml}
+          <div class="run-delta-grid">
+            ${profileCardsHtml}
+          </div>
+        </div>
+      </details>
+    `;
+  }
+
+  function renderRunDeltaHistoryNavigator(deltaModel) {
+    if (
+      !deltaModel
+      || !deltaModel.available
+      || !Number.isFinite(deltaModel.totalComparisons)
+      || deltaModel.totalComparisons <= 1
+    ) {
+      return "";
+    }
+
+    return `
+      <div class="run-delta-nav" role="group" aria-label="Track Record history navigation">
+        <button
+          type="button"
+          class="run-delta-nav-btn"
+          data-direction="older"
+          ${deltaModel.canGoOlder ? "" : "disabled"}
+        >
+          &larr; Older
+        </button>
+        <button
+          type="button"
+          class="run-delta-nav-btn"
+          data-direction="newer"
+          ${deltaModel.canGoNewer ? "" : "disabled"}
+        >
+          Newer &rarr;
+        </button>
+      </div>
+    `;
+  }
+
+  function getTrackRecordProfiles(profileDeltas) {
+    if (!Array.isArray(profileDeltas) || profileDeltas.length === 0) {
+      return [];
+    }
+
+    const profileByName = new Map();
+    profileDeltas.forEach((profileDelta) => {
+      if (!profileDelta || !profileDelta.profile) {
+        return;
+      }
+      profileByName.set(String(profileDelta.profile), profileDelta);
+    });
+
+    return RUN_PROFILE_ORDER
+      .map((profileName) => profileByName.get(profileName))
+      .filter(Boolean);
+  }
+
+  function renderRunDeltaHeaderStates(profileDeltas) {
+    if (!Array.isArray(profileDeltas) || profileDeltas.length === 0) {
+      return "";
+    }
+
+    return `
+      <span class="run-delta-header-states" aria-label="Track Record profile states">
+        ${profileDeltas.map((profileDelta) => renderRunDeltaHeaderStateItem(profileDelta)).join("")}
+      </span>
+    `;
+  }
+
+  function renderRunDeltaHeaderStateItem(profileDelta) {
+    if (!profileDelta) {
+      return "";
+    }
+
+    const profileName = escapeHtml(formatProfileName(profileDelta.profile));
+    const stateClass = getDeltaBadgeClass(profileDelta.state);
+    const stateLabel = getDeltaBadgeLabel(profileDelta.state);
+
+    return `
+      <span class="run-delta-header-state">
+        <span class="run-delta-state-name">${profileName}</span>
+        <span class="badge run-delta-profile-badge ${stateClass}">${stateLabel}</span>
+      </span>
+    `;
+  }
+
+  function renderRunDeltaProfile(profileDelta) {
+    if (!profileDelta) {
+      return "";
+    }
+
+    const profileName = escapeHtml(formatProfileName(profileDelta.profile));
+    const stateClass = getDeltaBadgeClass(profileDelta.state);
+    const stateLabel = getDeltaBadgeLabel(profileDelta.state);
+    const transitionLabel = getDeltaTransitionLabel(profileDelta.currentPassed, profileDelta.previousPassed);
+
+    if (!profileDelta.hasBaseline) {
+      return `
+        <article class="run-delta-profile run-delta-profile-new">
+          <header class="run-delta-profile-header">
+            <h4>${profileName}</h4>
+            <span class="badge run-delta-profile-badge mixed">${stateLabel}</span>
+          </header>
+          <p class="run-delta-transition">No baseline profile in the previous run.</p>
+        </article>
+      `;
+    }
+
+    return `
+      <article class="run-delta-profile run-delta-profile-${escapeHtml(profileDelta.state)}">
+        <header class="run-delta-profile-header">
+          <h4>${profileName}</h4>
+          <span class="badge run-delta-profile-badge ${stateClass}">${stateLabel}</span>
+        </header>
+        <p class="run-delta-transition">${escapeHtml(transitionLabel)}</p>
+        <ul class="run-delta-metric-list">
+          ${renderRunDeltaMetric("Errors", profileDelta.errorsDelta, { direction: "down" })}
+          ${renderRunDeltaMetric("Failed rules", profileDelta.failedRulesDelta, { direction: "down" })}
+          ${renderRunDeltaMetric("Checked rules", profileDelta.checkedRulesDelta, { direction: "neutral" })}
+          ${renderRunDeltaMetric("New issues", profileDelta.newIssues, { direction: "down", showSign: false })}
+          ${renderRunDeltaMetric("Resolved issues", profileDelta.resolvedIssues, { direction: "up", showSign: false })}
+          ${renderRunDeltaMetric("Unchanged issues", profileDelta.unchangedIssues, { direction: "neutral", showSign: false })}
+        </ul>
+      </article>
+    `;
+  }
+
+  function renderRunDeltaMetric(label, value, options) {
+    const direction = options && options.direction ? options.direction : "neutral";
+    const suffix = options && options.suffix ? options.suffix : "";
+    const showSign = !options || options.showSign !== false;
+    const className = getMetricDeltaClass(value, direction);
+    const valueLabel = formatSignedNumber(value, suffix, showSign);
+
+    return `
+      <li>
+        <span>${escapeHtml(label)}</span>
+        <strong class="run-delta-pill run-delta-pill-${className}">${escapeHtml(valueLabel)}</strong>
+      </li>
+    `;
+  }
+
+  function getMetricDeltaClass(value, direction) {
+    if (!Number.isFinite(value) || value === 0 || direction === "neutral") {
+      return "neutral";
+    }
+
+    if (direction === "down") {
+      return value < 0 ? "good" : "bad";
+    }
+    if (direction === "up") {
+      return value > 0 ? "good" : "bad";
+    }
+
+    return "neutral";
+  }
+
+  function formatSignedNumber(value, suffix, showSign) {
+    if (!Number.isFinite(value)) {
+      return "n/a";
+    }
+
+    const prefix = showSign && value > 0 ? "+" : "";
+    return `${prefix}${value}${suffix || ""}`;
+  }
+
+  function getDeltaBadgeClass(state) {
+    if (state === "improved") {
+      return "improved";
+    }
+    if (state === "regressed") {
+      return "regressed";
+    }
+    if (state === "unchanged") {
+      return "unchanged";
+    }
+    return "mixed";
+  }
+
+  function getDeltaBadgeLabel(state) {
+    if (state === "improved") {
+      return "Improved";
+    }
+    if (state === "regressed") {
+      return "Regressed";
+    }
+    if (state === "unchanged") {
+      return "Unchanged";
+    }
+    if (state === "new") {
+      return "New Profile";
+    }
+    if (state === "unavailable") {
+      return "Baseline pending";
+    }
+    return "Mixed";
+  }
+
+  function getDeltaTransitionLabel(currentPassed, previousPassed) {
+    const currentStatus = currentPassed ? "Pass" : "Fail";
+    if (previousPassed == null) {
+      return `Current status: ${currentStatus}`;
+    }
+
+    const previousStatus = previousPassed ? "Pass" : "Fail";
+    if (previousStatus === currentStatus) {
+      return `Status unchanged: ${currentStatus}`;
+    }
+    return `Status changed: ${previousStatus} → ${currentStatus}`;
+  }
+
+  function formatRunSnapshotReference(snapshot) {
+    const timestamp = formatRunTimestamp(snapshot && snapshot.runAt);
+
+    if (timestamp) {
+      return timestamp;
+    }
+    return "the previous run";
+  }
+
+  function formatRunTimestamp(value) {
+    const date = new Date(value || "");
+    if (!Number.isFinite(date.getTime())) {
+      return "";
+    }
+    return date.toLocaleString();
+  }
+
+  function loadRunSnapshotStoreFromStorage() {
+    try {
+      const storage = window.localStorage;
+      if (!storage) {
+        return {};
+      }
+
+      const raw = storage.getItem(RUN_DELTA_STORAGE_KEY);
+      if (!raw) {
+        return {};
+      }
+
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== "object") {
+        return {};
+      }
+
+      const keyedSnapshots = parsed.snapshotsByDocumentKey;
+      if (keyedSnapshots && typeof keyedSnapshots === "object") {
+        return normalizeRunSnapshotStore(keyedSnapshots);
+      }
+
+      if (isRunSnapshotRecord(parsed)) {
+        const key = buildRunDeltaDocumentKey(
+          parsed.documentKey || parsed.documentLabel || RUN_DELTA_DEFAULT_KEY,
+        );
+        return {
+          [key]: [parsed],
+        };
+      }
+
+      return {};
+    } catch (_error) {
+      return {};
+    }
+  }
+
+  function saveRunSnapshotStoreToStorage(snapshotStore) {
+    if (!snapshotStore || typeof snapshotStore !== "object") {
+      return;
+    }
+
+    try {
+      const storage = window.localStorage;
+      if (!storage) {
+        return;
+      }
+      const normalizedStore = normalizeRunSnapshotStore(snapshotStore);
+      storage.setItem(
+        RUN_DELTA_STORAGE_KEY,
+        JSON.stringify({
+          snapshotsByDocumentKey: normalizedStore,
+        }),
+      );
+    } catch (_error) {
+      // Ignore storage quota/privacy errors.
+    }
+  }
+
+  function normalizeRunSnapshotStore(snapshotStore) {
+    if (!snapshotStore || typeof snapshotStore !== "object") {
+      return {};
+    }
+
+    const normalizedStore = {};
+    Object.entries(snapshotStore).forEach(([key, snapshotOrHistory]) => {
+      const history = normalizeRunSnapshotHistory(snapshotOrHistory);
+      if (!history.length) {
+        return;
+      }
+
+      const latestSnapshot = history[history.length - 1];
+      const normalizedKey = buildRunDeltaDocumentKey(
+        key || latestSnapshot.documentKey || latestSnapshot.documentLabel || RUN_DELTA_DEFAULT_KEY,
+      );
+      normalizedStore[normalizedKey] = history;
+    });
+
+    return normalizedStore;
+  }
+
+  function normalizeRunSnapshotHistory(snapshotOrHistory) {
+    if (Array.isArray(snapshotOrHistory)) {
+      return snapshotOrHistory.filter((snapshot) => isRunSnapshotRecord(snapshot));
+    }
+
+    if (isRunSnapshotRecord(snapshotOrHistory)) {
+      return [snapshotOrHistory];
+    }
+
+    return [];
+  }
+
+  function isRunSnapshotRecord(value) {
+    if (!value || typeof value !== "object") {
+      return false;
+    }
+
+    return Boolean(value.profiles && typeof value.profiles === "object");
   }
 
   function getOverallResultState(data) {
@@ -547,6 +1424,12 @@
         hasChanges = true;
       }
 
+      const ruleEvidence = buildIssueRuleEvidencePayload(normalizedIssue, ruleData, matchedEntry);
+      if (ruleEvidence) {
+        normalizedIssue.rule_evidence = ruleEvidence;
+        hasChanges = true;
+      }
+
       return hasChanges ? normalizedIssue : issue;
     });
   }
@@ -615,24 +1498,53 @@
       const ruleTags = splitCategoryValue(ruleNode.getAttribute("tags"));
       const failedEntries = extractFailedEntriesFromRuleNode(ruleNode);
       const failedChecks = extractFailedChecksFromRuleNode(ruleNode, failedEntries.length);
+      const ruleMetadata = extractRuleMetadataFromNode(ruleNode);
 
-      const existing = ruleDataByRuleId.get(ruleId) || { tags: [], entries: [], failedChecks: null };
+      const existing = ruleDataByRuleId.get(ruleId) || {
+        tags: [],
+        entries: [],
+        failedChecks: null,
+        specification: null,
+        clause: null,
+        testNumber: null,
+        description: null,
+        test: null,
+        object: null,
+      };
       const mergedTags = dedupeCategoryValues([...existing.tags, ...ruleTags]);
       const mergedEntries = [...existing.entries, ...failedEntries];
       const mergedFailedChecks = sumNullableCounts(existing.failedChecks, failedChecks);
-
-      if (!mergedTags.length && !mergedEntries.length && mergedFailedChecks == null) {
-        return;
-      }
-
-      ruleDataByRuleId.set(ruleId, {
+      const mergedRuleData = {
         tags: mergedTags,
         entries: mergedEntries,
         failedChecks: mergedFailedChecks,
-      });
+        specification: coalesceText(existing.specification, ruleMetadata.specification),
+        clause: coalesceText(existing.clause, ruleMetadata.clause),
+        testNumber: coalesceText(existing.testNumber, ruleMetadata.testNumber),
+        description: coalesceText(existing.description, ruleMetadata.description),
+        test: coalesceText(existing.test, ruleMetadata.test),
+        object: coalesceText(existing.object, ruleMetadata.object),
+      };
+
+      if (!mergedTags.length && !mergedEntries.length && mergedFailedChecks == null && !hasRuleMetadata(mergedRuleData)) {
+        return;
+      }
+
+      ruleDataByRuleId.set(ruleId, mergedRuleData);
     });
 
     return ruleDataByRuleId;
+  }
+
+  function extractRuleMetadataFromNode(ruleNode) {
+    return {
+      specification: normalizeOptionalText(ruleNode.getAttribute("specification")),
+      clause: normalizeOptionalText(ruleNode.getAttribute("clause")),
+      testNumber: normalizeOptionalText(ruleNode.getAttribute("testNumber")),
+      description: getFirstDirectChildText(ruleNode, "description"),
+      test: getFirstDirectChildText(ruleNode, "test"),
+      object: getFirstDirectChildText(ruleNode, "object"),
+    };
   }
 
   function buildRuleIdFromXmlRule(ruleNode) {
@@ -682,12 +1594,14 @@
         || fallbackMessage
       );
 
-      return {
+      return normalizeEvidenceEntry({
         location,
         message,
         page: extractPageNumber(location || message),
-      };
-    });
+        type: String(entryNode.localName || entryNode.nodeName || "entry").toLowerCase(),
+        status: normalizeOptionalText(entryNode.getAttribute("status")) || "failed",
+      });
+    }).filter(Boolean);
   }
 
   function extractFailedChecksFromRuleNode(ruleNode, fallbackCount) {
@@ -712,6 +1626,15 @@
     return parsed;
   }
 
+  function normalizeOptionalText(value) {
+    if (value == null) {
+      return null;
+    }
+
+    const normalized = String(value).trim();
+    return normalized ? normalized : null;
+  }
+
   function sumNullableCounts(first, second) {
     if (first == null) {
       return second;
@@ -720,6 +1643,142 @@
       return first;
     }
     return first + second;
+  }
+
+  function coalesceText(first, second) {
+    return normalizeOptionalText(first) || normalizeOptionalText(second);
+  }
+
+  function hasRuleMetadata(ruleData) {
+    if (!ruleData) {
+      return false;
+    }
+
+    return Boolean(
+      ruleData.specification
+      || ruleData.clause
+      || ruleData.testNumber
+      || ruleData.description
+      || ruleData.test
+      || ruleData.object
+    );
+  }
+
+  function buildIssueRuleEvidencePayload(issue, ruleData, matchedEntry) {
+    if (!ruleData) {
+      return null;
+    }
+
+    const evidenceEntries = collectRuleEvidenceEntries(ruleData.entries, matchedEntry);
+    const payload = {
+      ruleId: normalizeOptionalText(issue && issue.rule_id),
+      specification: normalizeOptionalText(ruleData.specification),
+      clause: normalizeOptionalText(ruleData.clause),
+      testNumber: normalizeOptionalText(ruleData.testNumber),
+      description: normalizeOptionalText(ruleData.description),
+      test: normalizeOptionalText(ruleData.test),
+      object: normalizeOptionalText(ruleData.object),
+      failedChecks: parseNonNegativeInteger(ruleData.failedChecks),
+      entries: evidenceEntries,
+    };
+
+    if (!hasIssueRuleEvidencePayload(payload)) {
+      return null;
+    }
+    return payload;
+  }
+
+  function hasIssueRuleEvidencePayload(payload) {
+    if (!payload) {
+      return false;
+    }
+
+    return Boolean(
+      payload.ruleId
+      || payload.specification
+      || payload.clause
+      || payload.testNumber
+      || payload.description
+      || payload.test
+      || payload.object
+      || payload.failedChecks != null
+      || (Array.isArray(payload.entries) && payload.entries.length)
+    );
+  }
+
+  function collectRuleEvidenceEntries(entries, matchedEntry) {
+    const evidenceEntries = [];
+    const normalizedMatchedEntry = normalizeEvidenceEntry(matchedEntry);
+
+    if (normalizedMatchedEntry) {
+      evidenceEntries.push(normalizedMatchedEntry);
+    }
+
+    if (!Array.isArray(entries) || !entries.length) {
+      return evidenceEntries;
+    }
+
+    for (const entry of entries) {
+      if (evidenceEntries.length >= 5) {
+        break;
+      }
+
+      const normalizedEntry = normalizeEvidenceEntry(entry);
+      if (!normalizedEntry) {
+        continue;
+      }
+
+      if (
+        normalizedMatchedEntry
+        && areEvidenceEntriesEquivalent(normalizedEntry, normalizedMatchedEntry)
+      ) {
+        continue;
+      }
+
+      evidenceEntries.push(normalizedEntry);
+    }
+
+    return evidenceEntries;
+  }
+
+  function normalizeEvidenceEntry(entry) {
+    if (!entry || typeof entry !== "object") {
+      return null;
+    }
+
+    const normalizedEntry = {
+      location: normalizeOptionalText(entry.location),
+      message: normalizeOptionalText(entry.message),
+      page: normalizePositivePageNumber(entry.page),
+      type: normalizeOptionalText(entry.type),
+      status: normalizeOptionalText(entry.status),
+    };
+
+    if (
+      normalizedEntry.location == null
+      && normalizedEntry.message == null
+      && normalizedEntry.page == null
+      && normalizedEntry.type == null
+      && normalizedEntry.status == null
+    ) {
+      return null;
+    }
+
+    return normalizedEntry;
+  }
+
+  function areEvidenceEntriesEquivalent(left, right) {
+    if (!left || !right) {
+      return false;
+    }
+
+    return (
+      left.location === right.location
+      && left.message === right.message
+      && left.page === right.page
+      && left.type === right.type
+      && left.status === right.status
+    );
   }
 
   function getFailedDescendantsByTagName(element, tagName) {
@@ -867,7 +1926,10 @@
           </td>
         </tr>
         <tr class="issue-fix-plan-row ${stripeClass}">
-          <td colspan="5">${renderIssueFixPlan(issue)}</td>
+          <td colspan="5">
+            ${renderIssueFixPlan(issue)}
+            ${renderIssueRuleEvidence(issue)}
+          </td>
         </tr>
         ${isLastIssue ? "" : `
         <tr class="issue-gap-row" aria-hidden="true">
@@ -900,6 +1962,184 @@
         </div>
       </details>
     `;
+  }
+
+  function renderIssueRuleEvidence(issue) {
+    const evidence = buildIssueRuleEvidenceDrawerModel(issue);
+    if (!evidence) {
+      return "";
+    }
+
+    const facts = buildIssueRuleEvidenceFacts(evidence);
+    const factsHtml = facts.length
+      ? `<ul class="issue-fix-steps">${facts.map((fact) => `<li>${escapeHtml(fact)}</li>`).join("")}</ul>`
+      : "";
+
+    const entriesHtml = evidence.entries.length
+      ? `
+        <p>${escapeHtml(buildIssueRuleEvidenceEntriesLabel(evidence.entries.length))}</p>
+        <ol class="issue-fix-steps">
+          ${evidence.entries.map((entry, index) => `<li>${escapeHtml(formatIssueRuleEvidenceEntry(entry, index))}</li>`).join("")}
+        </ol>
+      `
+      : "";
+
+    return `
+      <details class="issue-fix-plan issue-rule-evidence">
+        <summary>Rule evidence</summary>
+        <div class="issue-fix-plan-body">
+          ${factsHtml}
+          ${entriesHtml}
+        </div>
+      </details>
+    `;
+  }
+
+  function buildIssueRuleEvidenceDrawerModel(issue) {
+    const sourceEvidence = issue && issue.rule_evidence && typeof issue.rule_evidence === "object"
+      ? issue.rule_evidence
+      : null;
+
+    const failedChecks = parseNonNegativeInteger(
+      sourceEvidence && sourceEvidence.failedChecks != null
+        ? sourceEvidence.failedChecks
+        : issue && issue.failed_checks,
+    );
+
+    const categories = getIssueCategories(issue);
+    const entries = buildIssueRuleEvidenceEntries(issue, sourceEvidence);
+    const model = {
+      ruleId: normalizeOptionalText(
+        (sourceEvidence && sourceEvidence.ruleId)
+        || (issue && issue.rule_id),
+      ),
+      severity: normalizeOptionalText(issue && issue.severity),
+      category: categories.length ? categories.join(", ") : null,
+      failedChecks,
+      page: normalizePositivePageNumber(issue && issue.page),
+      location: normalizeOptionalText(issue && issue.location),
+      message: normalizeOptionalText(issue && issue.message),
+      specification: normalizeOptionalText(sourceEvidence && sourceEvidence.specification),
+      clause: normalizeOptionalText(sourceEvidence && sourceEvidence.clause),
+      testNumber: normalizeOptionalText(sourceEvidence && sourceEvidence.testNumber),
+      description: normalizeOptionalText(sourceEvidence && sourceEvidence.description),
+      test: normalizeOptionalText(sourceEvidence && sourceEvidence.test),
+      object: normalizeOptionalText(sourceEvidence && sourceEvidence.object),
+      entries,
+    };
+
+    const hasContent = Boolean(
+      model.ruleId
+      || model.severity
+      || model.category
+      || model.failedChecks != null
+      || model.page != null
+      || model.location
+      || model.message
+      || model.specification
+      || model.clause
+      || model.testNumber
+      || model.description
+      || model.test
+      || model.object
+      || model.entries.length
+    );
+
+    return hasContent ? model : null;
+  }
+
+  function buildIssueRuleEvidenceEntries(issue, sourceEvidence) {
+    const entries = [];
+    const sourceEntries = sourceEvidence && Array.isArray(sourceEvidence.entries)
+      ? sourceEvidence.entries
+      : [];
+
+    for (const entry of sourceEntries) {
+      if (entries.length >= 5) {
+        break;
+      }
+
+      const normalizedEntry = normalizeEvidenceEntry(entry);
+      if (!normalizedEntry) {
+        continue;
+      }
+
+      entries.push(normalizedEntry);
+    }
+
+    if (!entries.length) {
+      const fallbackEntry = normalizeEvidenceEntry({
+        type: "issue",
+        status: issue && issue.severity,
+        page: issue && issue.page,
+        location: issue && issue.location,
+        message: issue && issue.message,
+      });
+
+      if (fallbackEntry) {
+        entries.push(fallbackEntry);
+      }
+    }
+
+    return entries;
+  }
+
+  function buildIssueRuleEvidenceFacts(evidence) {
+    const facts = [];
+
+    pushIssueRuleEvidenceFact(facts, "Rule ID", evidence.ruleId);
+    pushIssueRuleEvidenceFact(facts, "Severity", evidence.severity);
+    pushIssueRuleEvidenceFact(facts, "Categories", evidence.category);
+    pushIssueRuleEvidenceFact(facts, "Failed checks", evidence.failedChecks);
+    pushIssueRuleEvidenceFact(facts, "Page", evidence.page);
+    pushIssueRuleEvidenceFact(facts, "Location", evidence.location);
+    pushIssueRuleEvidenceFact(facts, "Message", evidence.message);
+    pushIssueRuleEvidenceFact(facts, "Specification", evidence.specification);
+    pushIssueRuleEvidenceFact(facts, "Clause", evidence.clause);
+    pushIssueRuleEvidenceFact(facts, "Test number", evidence.testNumber);
+    pushIssueRuleEvidenceFact(facts, "Rule description", evidence.description);
+    pushIssueRuleEvidenceFact(facts, "Rule test", evidence.test);
+    pushIssueRuleEvidenceFact(facts, "Rule object", evidence.object);
+
+    return facts;
+  }
+
+  function pushIssueRuleEvidenceFact(facts, label, value) {
+    if (value == null || value === "") {
+      return;
+    }
+    facts.push(`${label}: ${value}`);
+  }
+
+  function buildIssueRuleEvidenceEntriesLabel(entryCount) {
+    if (entryCount <= 1) {
+      return "Failed check";
+    }
+    return `Failed checks (showing ${entryCount})`;
+  }
+
+  function formatIssueRuleEvidenceEntry(entry, index) {
+    const type = normalizeOptionalText(entry && entry.type) || `entry ${index + 1}`;
+    const status = normalizeOptionalText(entry && entry.status);
+    const page = normalizePositivePageNumber(entry && entry.page);
+    const location = normalizeOptionalText(entry && entry.location);
+    const message = normalizeOptionalText(entry && entry.message) || "No message provided.";
+
+    const prefixParts = [type];
+    if (status) {
+      prefixParts.push(`status ${status}`);
+    }
+
+    const locatorParts = [];
+    if (page != null) {
+      locatorParts.push(`page ${page}`);
+    }
+    if (location) {
+      locatorParts.push(location);
+    }
+
+    const locatorText = locatorParts.length ? ` (${locatorParts.join(" | ")})` : "";
+    return `${prefixParts.join(", ")}${locatorText}: ${message}`;
   }
 
   function buildIssueFixPlan(issue) {

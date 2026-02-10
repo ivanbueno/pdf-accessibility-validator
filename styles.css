@@ -1172,6 +1172,267 @@ button:disabled {
   color: var(--mixed);
 }
 
+.badge.improved {
+  background: rgba(42, 143, 95, 0.16);
+  color: var(--ok);
+}
+
+.badge.regressed {
+  background: rgba(181, 63, 44, 0.16);
+  color: var(--fail);
+}
+
+.badge.unchanged {
+  background: rgba(95, 86, 77, 0.14);
+  color: var(--ink-soft);
+}
+
+.run-delta {
+  margin: 0;
+  padding: 0.82rem 1rem 0.9rem;
+  border-top: 1px dashed color-mix(in srgb, var(--ink-soft) 24%, var(--line));
+  border-bottom: 1px dashed color-mix(in srgb, var(--ink-soft) 20%, var(--line));
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.8), rgba(251, 247, 240, 0.82));
+}
+
+.run-delta.run-delta-improved {
+  background: linear-gradient(180deg, rgba(42, 143, 95, 0.1), rgba(250, 255, 252, 0.94));
+}
+
+.run-delta.run-delta-regressed {
+  background: linear-gradient(180deg, rgba(181, 63, 44, 0.1), rgba(255, 249, 247, 0.94));
+}
+
+.run-delta.run-delta-mixed {
+  background: linear-gradient(180deg, rgba(169, 127, 20, 0.1), rgba(255, 251, 239, 0.94));
+}
+
+.run-delta.run-delta-unavailable {
+  background: linear-gradient(180deg, rgba(95, 86, 77, 0.09), rgba(251, 247, 240, 0.92));
+}
+
+.run-delta-summary {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: nowrap;
+  margin: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+.run-delta-summary::-webkit-details-marker {
+  display: none;
+}
+
+.run-delta-summary:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent-secondary) 55%, #fff);
+  outline-offset: 3px;
+}
+
+.run-delta-summary-title {
+  margin: 0;
+  font-size: 0.93rem;
+  font-weight: 700;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+.run-delta-header-states {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  white-space: nowrap;
+  scrollbar-width: thin;
+}
+
+.run-delta-header-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.38rem;
+  padding: 0.18rem 0.28rem 0.18rem 0.45rem;
+  border: 1px solid color-mix(in srgb, var(--ink-soft) 16%, var(--line));
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.run-delta-state-name {
+  color: var(--ink-soft);
+  font-size: 0.73rem;
+  line-height: 1.2;
+}
+
+.run-delta-summary-toggle {
+  flex: 0 0 auto;
+  width: 1rem;
+  color: var(--ink-soft);
+  text-align: center;
+  font-weight: 700;
+}
+
+.run-delta-summary-toggle::before {
+  content: "+";
+}
+
+.run-delta[open] .run-delta-summary-toggle::before {
+  content: "−";
+}
+
+.run-delta-body {
+  margin-top: 0.62rem;
+}
+
+.run-delta-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.38rem;
+  flex-wrap: wrap;
+}
+
+.run-delta-nav-btn {
+  border: 1px solid color-mix(in srgb, var(--accent-secondary) 24%, var(--line));
+  border-radius: 999px;
+  padding: 0.24rem 0.62rem;
+  background: color-mix(in srgb, var(--accent-secondary) 8%, #fff);
+  color: var(--accent-secondary-strong);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.72rem;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+.run-delta-nav-btn:disabled {
+  opacity: 0.45;
+}
+
+.run-delta-note {
+  margin: 0.45rem 0 0;
+  color: var(--ink-soft);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.77rem;
+  line-height: 1.45;
+}
+
+.run-delta-body .run-delta-note:first-child {
+  margin-top: 0;
+}
+
+.run-delta-grid {
+  margin-top: 0.72rem;
+  display: grid;
+  gap: 0.65rem;
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 900px) {
+  .run-delta-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.run-delta-profile {
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  padding: 0.62rem;
+  background: rgba(255, 255, 255, 0.86);
+}
+
+.run-delta-profile.run-delta-profile-improved {
+  border-color: color-mix(in srgb, var(--ok) 30%, var(--line));
+  background: color-mix(in srgb, var(--ok) 6%, #fff);
+}
+
+.run-delta-profile.run-delta-profile-regressed {
+  border-color: color-mix(in srgb, var(--fail) 30%, var(--line));
+  background: color-mix(in srgb, var(--fail) 6%, #fff);
+}
+
+.run-delta-profile.run-delta-profile-mixed {
+  border-color: color-mix(in srgb, var(--mixed) 36%, var(--line));
+  background: color-mix(in srgb, var(--mixed) 8%, #fff);
+}
+
+.run-delta-profile.run-delta-profile-unchanged,
+.run-delta-profile.run-delta-profile-new {
+  border-color: color-mix(in srgb, var(--ink-soft) 20%, var(--line));
+  background: color-mix(in srgb, var(--ink-soft) 4%, #fff);
+}
+
+.run-delta-profile-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.48rem;
+  flex-wrap: wrap;
+}
+
+.run-delta-profile-header h4 {
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.3;
+}
+
+.run-delta-profile-badge {
+  font-size: 0.68rem;
+  padding: 0.14rem 0.45rem;
+}
+
+.run-delta-transition {
+  margin: 0.4rem 0 0;
+  color: var(--ink-soft);
+  font-size: 0.75rem;
+}
+
+.run-delta-metric-list {
+  margin: 0.55rem 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.32rem;
+}
+
+.run-delta-metric-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.76rem;
+}
+
+.run-delta-metric-list li > span {
+  color: var(--ink-soft);
+}
+
+.run-delta-pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0.14rem 0.48rem;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0.01em;
+}
+
+.run-delta-pill-good {
+  color: var(--ok);
+  background: rgba(42, 143, 95, 0.14);
+}
+
+.run-delta-pill-bad {
+  color: var(--fail);
+  background: rgba(181, 63, 44, 0.14);
+}
+
+.run-delta-pill-neutral {
+  color: var(--ink-soft);
+  background: rgba(95, 86, 77, 0.12);
+}
+
 .profile-grid {
   margin: 0;
   padding: 0.92rem 1rem 0.75rem;
