@@ -11,19 +11,34 @@
   const ANALYTICS_EVENT_NAME_PATTERN = /^[a-z][a-z0-9_]{0,39}$/;
   const ANALYTICS_PARAM_NAME_PATTERN = /^[a-z][a-z0-9_]{0,39}$/;
   const ANALYTICS_MAX_PARAM_VALUE_LENGTH = 100;
+  const PDFUA_LOADING_ACTIONS = [
+    "Validating tagged-PDF structure tree integrity...",
+    "Verifying RoleMap mappings and artifact usage...",
+    "Reviewing headings, paragraphs, and section semantics...",
+    "Validating list, table, and table-of-contents structures...",
+    "Checking alternative text for figures and formulas...",
+    "Reviewing annotations and form-field accessibility tagging...",
+    "Validating metadata, title, and primary language declarations...",
+    "Validating embedded fonts, Unicode maps, and CMap usage...",
+    "Checking parent-child relationships and reading order...",
+  ];
+  const WCAG_LOADING_ACTIONS = [
+    "Testing non-text alternatives and descriptive link purpose...",
+    "Reviewing keyboard-friendly navigation and focus flow...",
+    "Validating heading hierarchy and semantic structure cues...",
+    "Checking table relationships and data/header associations...",
+    "Evaluating form labels, instructions, and error messaging cues...",
+    "Running color contrast and readability checks...",
+    "Reviewing zoom/reflow adaptability and text spacing signals...",
+    "Validating language-of-page and language-of-parts indicators...",
+    "Checking consistent navigation and predictable interaction patterns...",
+  ];
   const LOADING_ACTIONS = [
     "Preparing the PDF for validation...",
     "Checking PDF container syntax and document flags...",
-    "Verifying tagged-PDF structure and parent-child relationships...",
-    "Validating metadata, title, and viewer preferences...",
-    "Checking language declarations across document content...",
-    "Reviewing headings, paragraphs, and inline semantics...",
-    "Validating tables (headers, cells, spans, and layout consistency)...",
-    "Validating list and table-of-contents structures...",
-    "Checking alternative text for figures, formulas, links, and media...",
-    "Reviewing annotations and form-field accessibility tagging...",
-    "Validating embedded fonts, Unicode maps, and CMap usage...",
-    "Running readability checks (contrast, text size, and styling cues)...",
+    ...PDFUA_LOADING_ACTIONS,
+    ...WCAG_LOADING_ACTIONS,
+    "Correlating failed checks with rule evidence details...",
     "Finalizing PDF/UA-1 and WCAG profile results...",
   ];
   const LOADING_INTERVAL_MS = 1600;
