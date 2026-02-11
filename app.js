@@ -50,6 +50,8 @@
   const RUN_PROFILE_ORDER = ["pdfua-1", "wcag-2-2-complete.xml"];
   const COMPLIANCE_ERROR_WEIGHT = 0.5;
   const FIX_PLAN_MAX_STEPS = 6;
+  const FIX_PLAN_MATCHED_ACTION_LIMIT = 3;
+  const FIX_PLAN_DEFAULT_ACTION_LIMIT = 2;
   // Action guidance is phrased to stay tool-agnostic across remediation workflows.
   const FIX_PLAN_TEMPLATES = [
     {
@@ -57,11 +59,39 @@
       summary: "Document-level accessibility metadata is incomplete or inconsistent.",
       action: "Set document title and primary language so assistive technology announces the document correctly.",
       followUpActions: [
-        "Align document metadata fields so title and language values are consistent.",
-        "Configure reader preferences to show the document title instead of the file name.",
-        "Declare language changes for passages in other languages.",
-        "Confirm metadata is encoded correctly and not empty placeholders.",
-        "Reopen the PDF in a reader and verify title and language are exposed to assistive technology.",
+        {
+          id: "metadata-title",
+          pattern: /\b(title|document title|display\s*doc\s*title)\b/i,
+          step: "Set a concise, descriptive document title in metadata fields.",
+          defaultWhenNoMatch: true,
+        },
+        {
+          id: "metadata-language",
+          pattern: /\b(language|lang|primary language)\b/i,
+          step: "Set the primary document language code on the catalog.",
+          defaultWhenNoMatch: true,
+        },
+        {
+          id: "metadata-language-parts",
+          pattern: /\b(language of parts|foreign language|mixed language|passage)\b/i,
+          step: "Mark language changes for passages that differ from the primary document language.",
+        },
+        {
+          id: "metadata-xmp-sync",
+          pattern: /\b(xmp|metadata|document info|info dictionary)\b/i,
+          step: "Synchronize XMP and document info values so title and language are consistent.",
+          defaultWhenNoMatch: true,
+        },
+        {
+          id: "metadata-viewer-pref",
+          pattern: /\b(viewer|displaydoctitle|file name|filename)\b/i,
+          step: "Enable viewer preferences to show the title instead of the file name.",
+        },
+        {
+          id: "metadata-validation",
+          step: "Re-open the file in a reader and verify title and language are exposed correctly.",
+          always: true,
+        },
       ],
     },
     {
@@ -69,11 +99,44 @@
       summary: "The semantic structure tree needs correction.",
       action: "Repair the tag hierarchy so headings, paragraphs, lists, and sections follow a valid parent-child order.",
       followUpActions: [
-        "Apply consistent heading levels and semantic roles across the structure tree.",
-        "Fix broken structural references and invalid role mappings.",
-        "Verify list and section containers are nested correctly without skipped levels.",
-        "Reorder tags to match the intended reading sequence.",
-        "Mark purely decorative or layout-only elements as artifacts.",
+        {
+          id: "structure-heading-levels",
+          pattern: /\b(heading|h1|h2|h3|h4|h5|h6)\b/i,
+          step: "Normalize heading levels so they progress logically without skipped levels.",
+          defaultWhenNoMatch: true,
+        },
+        {
+          id: "structure-rolemap",
+          pattern: /\b(rolemap|custom tag|tag mapping|mapped)\b/i,
+          step: "Map custom roles to valid standard structure types.",
+        },
+        {
+          id: "structure-parent-tree",
+          pattern: /\b(parent|child|kids|ancestor|descendant)\b/i,
+          step: "Repair parent-child relationships so each structure element points to the correct parent.",
+          defaultWhenNoMatch: true,
+        },
+        {
+          id: "structure-reading-order",
+          pattern: /\b(reading order|sequence|logical order|out of order)\b/i,
+          step: "Reorder structure elements to match the intended reading order.",
+          defaultWhenNoMatch: true,
+        },
+        {
+          id: "structure-list-shape",
+          pattern: /\b(list|li|lbl|lbody)\b/i,
+          step: "Ensure lists use consistent list item, label, and body substructure.",
+        },
+        {
+          id: "structure-artifacts",
+          pattern: /\b(artifact|decorative|background|layout only)\b/i,
+          step: "Mark decorative and layout-only content as artifacts.",
+        },
+        {
+          id: "structure-validation",
+          step: "Recheck the structure tree to confirm no orphaned or unreferenced tags remain.",
+          always: true,
+        },
       ],
     },
     {
@@ -81,11 +144,38 @@
       summary: "Table semantics or header associations are broken.",
       action: "Tag the table structure correctly and associate header cells with data cells using proper scope or ID references.",
       followUpActions: [
-        "Confirm header cells are explicitly identified and mapped to related data cells.",
-        "Add a short table summary when extra context is needed to interpret the data.",
-        "Ensure each table row contains valid header/data cell structure.",
-        "For complex tables, use explicit header associations instead of positional assumptions.",
-        "Verify merged cells do not break announced header context.",
+        {
+          id: "table-headers",
+          pattern: /\b(header|th|scope)\b/i,
+          step: "Identify header cells explicitly and define their scope.",
+          defaultWhenNoMatch: true,
+        },
+        {
+          id: "table-associations",
+          pattern: /\b(headers|id|association|associated)\b/i,
+          step: "Create explicit header-to-data associations for complex tables.",
+        },
+        {
+          id: "table-structure",
+          pattern: /\b(table|tr|td|th)\b/i,
+          step: "Validate the table hierarchy so rows and cells are nested correctly.",
+          defaultWhenNoMatch: true,
+        },
+        {
+          id: "table-span",
+          pattern: /\b(rowspan|colspan|merged cell|span)\b/i,
+          step: "Verify merged-cell spans preserve correct header context across rows and columns.",
+        },
+        {
+          id: "table-summary",
+          pattern: /\b(summary|complex table|multi-level header)\b/i,
+          step: "Add a short summary when the table requires extra context for interpretation.",
+        },
+        {
+          id: "table-validation",
+          step: "Test cell navigation with assistive technology to confirm announced headers are accurate.",
+          always: true,
+        },
       ],
     },
     {
@@ -93,11 +183,38 @@
       summary: "Image semantics need alternative-text remediation.",
       action: "Add meaningful alternate text to informative images and mark decorative graphics as artifacts.",
       followUpActions: [
-        "Provide text equivalents for symbols or visual-only content that conveys meaning.",
-        "Keep alternate text concise and focused on purpose, not visual styling.",
-        "Avoid duplicating nearby caption text unless needed for understanding.",
-        "Mark repeated decorative icons, borders, and spacers as artifacts.",
-        "Check that informative figures remain in reading order and are not hidden from assistive technology.",
+        {
+          id: "image-alt",
+          pattern: /\b(alt text|alternate text|missing alt|no alt)\b/i,
+          step: "Write concise alternate text that captures the image purpose.",
+          defaultWhenNoMatch: true,
+        },
+        {
+          id: "image-decorative",
+          pattern: /\b(artifact|decorative|ornamental|background)\b/i,
+          step: "Mark decorative images as artifacts so they are skipped by assistive technology.",
+          defaultWhenNoMatch: true,
+        },
+        {
+          id: "image-symbols",
+          pattern: /\b(icon|symbol|equation|formula|diagram)\b/i,
+          step: "Provide text equivalents for symbols, formulas, or diagram-only meaning.",
+        },
+        {
+          id: "image-caption",
+          pattern: /\b(caption|duplicate alt|repeated description)\b/i,
+          step: "Avoid duplicating nearby captions unless the caption omits key information.",
+        },
+        {
+          id: "image-order",
+          pattern: /\b(reading order|figure order|tag order)\b/i,
+          step: "Place informative figures in the correct reading order within the tag tree.",
+        },
+        {
+          id: "image-validation",
+          step: "Verify each informative figure exposes useful text and each decorative image is ignored.",
+          always: true,
+        },
       ],
     },
     {
@@ -105,11 +222,38 @@
       summary: "Interactive content lacks accessible properties.",
       action: "Ensure fields, annotations, and links are tagged and include accessible labels or text equivalents.",
       followUpActions: [
-        "Set clear accessible names and descriptions for each form control and annotation.",
-        "Confirm links expose meaningful purpose and are correctly represented in the structure tree.",
-        "Verify keyboard navigation order follows a logical reading sequence.",
-        "Ensure required fields, errors, and instructions are programmatically conveyed.",
-        "Confirm annotation popups and comments include usable text alternatives where applicable.",
+        {
+          id: "interactive-labels",
+          pattern: /\b(form|field|label|tooltip|tu|name)\b/i,
+          step: "Set accessible names and descriptions for each form control and annotation.",
+          defaultWhenNoMatch: true,
+        },
+        {
+          id: "interactive-links",
+          pattern: /\b(link|hyperlink|uri|destination)\b/i,
+          step: "Ensure link text or alternate descriptions communicate the destination or action.",
+          defaultWhenNoMatch: true,
+        },
+        {
+          id: "interactive-widget-role",
+          pattern: /\b(widget|button|checkbox|radio|combobox|listbox)\b/i,
+          step: "Confirm widget annotations are mapped to the correct interactive structure roles.",
+        },
+        {
+          id: "interactive-focus-order",
+          pattern: /\b(tab order|keyboard|focus|navigation)\b/i,
+          step: "Align keyboard focus order with the visual and reading sequence.",
+        },
+        {
+          id: "interactive-errors",
+          pattern: /\b(required|error|instruction|validation message)\b/i,
+          step: "Expose required state, instructions, and error text programmatically.",
+        },
+        {
+          id: "interactive-validation",
+          step: "Complete a keyboard-only pass to verify all interactive controls are reachable and understandable.",
+          always: true,
+        },
       ],
     },
     {
@@ -117,11 +261,38 @@
       summary: "Text encoding or font mapping is preventing reliable screen-reader output.",
       action: "Embed fonts and repair Unicode mappings (ToUnicode/CMap) so extracted text matches visual text.",
       followUpActions: [
-        "Ensure every visible glyph maps to the correct Unicode text output.",
-        "Check extracted text spacing and reading order for accuracy.",
-        "Replace or remediate fonts that produce ambiguous character mappings.",
-        "Validate that ligatures and special symbols extract to expected characters.",
-        "Spot-check copy/paste output on affected pages to confirm text fidelity.",
+        {
+          id: "font-unicode-map",
+          pattern: /\b(unicode|tounicode|cmap|encoding)\b/i,
+          step: "Repair Unicode mappings so each visible glyph resolves to the expected character.",
+          defaultWhenNoMatch: true,
+        },
+        {
+          id: "font-embed",
+          pattern: /\b(embed|embedded|missing font|subset font)\b/i,
+          step: "Embed missing fonts or replace problematic subsets that break text extraction.",
+          defaultWhenNoMatch: true,
+        },
+        {
+          id: "font-ligature-symbol",
+          pattern: /\b(ligature|glyph|symbol|special character)\b/i,
+          step: "Validate ligatures and symbols extract to meaningful Unicode sequences.",
+        },
+        {
+          id: "font-spacing",
+          pattern: /\b(text extraction|spacing|word break|copy|paste)\b/i,
+          step: "Fix text spacing and token boundaries so copied text reads naturally.",
+        },
+        {
+          id: "font-garbled",
+          pattern: /\b(garbled|mojibake|invalid character|unreadable)\b/i,
+          step: "Replace or remap fonts that produce garbled output for assistive technology.",
+        },
+        {
+          id: "font-validation",
+          step: "Spot-check copied text from affected pages to confirm extraction fidelity.",
+          always: true,
+        },
       ],
     },
     {
@@ -129,10 +300,38 @@
       summary: "Visual readability requirements may not be met.",
       action: "Adjust color contrast and visual styling so text remains perceivable across expected reading conditions.",
       followUpActions: [
-        "Recheck contrast for text, non-text graphics, and interactive states after styling changes.",
-        "Do not rely on color alone to communicate state, meaning, or required actions.",
-        "Confirm focus indicators and link styling remain visible against nearby backgrounds.",
-        "Re-test readability at increased zoom and common reflow scenarios.",
+        {
+          id: "color-text-contrast",
+          pattern: /\b(contrast|text contrast|low contrast)\b/i,
+          step: "Increase foreground/background contrast for text to meet target ratios.",
+          defaultWhenNoMatch: true,
+        },
+        {
+          id: "color-non-text-contrast",
+          pattern: /\b(non-text|icon|graphic|control boundary|indicator)\b/i,
+          step: "Adjust non-text graphics and control boundaries to preserve distinguishability.",
+        },
+        {
+          id: "color-not-alone",
+          pattern: /\b(color alone|color only|state by color|meaning by color)\b/i,
+          step: "Add text labels, patterns, or icons so meaning is not conveyed by color alone.",
+          defaultWhenNoMatch: true,
+        },
+        {
+          id: "color-focus",
+          pattern: /\b(focus|hover|active|visited|link styling)\b/i,
+          step: "Ensure focus and interaction states remain clearly visible on all backgrounds.",
+        },
+        {
+          id: "color-zoom",
+          pattern: /\b(zoom|reflow|200%|400%|text spacing)\b/i,
+          step: "Verify readability and contrast after zoom and reflow changes.",
+        },
+        {
+          id: "color-validation",
+          step: "Re-test affected pages with automated contrast checks and manual visual review.",
+          always: true,
+        },
       ],
     },
   ];
@@ -140,10 +339,21 @@
     summary: "This issue requires targeted remediation for the failing rule.",
     action: "Apply the fix required by this rule, then keep the structural semantics consistent.",
     followUpActions: [
-      "Correct the related tags and object properties tied to the failing rule.",
-      "Re-run validation and confirm the issue is resolved without introducing regressions.",
-      "Review neighboring content to ensure similar defects are remediated consistently.",
-      "Perform a quick manual check with keyboard navigation and screen-reader output.",
+      {
+        id: "default-targeted-fix",
+        step: "Correct the specific object properties and tags referenced by the failing rule.",
+        defaultWhenNoMatch: true,
+      },
+      {
+        id: "default-similar-content",
+        step: "Apply the same correction pattern to nearby content with the same structure.",
+        defaultWhenNoMatch: true,
+      },
+      {
+        id: "default-validation",
+        step: "Re-run validation and confirm the fix did not introduce regressions.",
+        always: true,
+      },
     ],
   };
   let loadingActionTimer = null;
@@ -2549,7 +2759,8 @@
   }
 
   function buildIssueFixPlan(issue) {
-    const template = resolveFixPlanTemplate(issue);
+    const issueSearchableText = buildIssueSearchableText(issue);
+    const template = resolveFixPlanTemplate(issue, issueSearchableText);
     const locatorStep = buildIssueLocatorStep(issue);
     const ruleId = issue && issue.rule_id != null ? String(issue.rule_id).trim() : "";
     const summary = ruleId
@@ -2558,7 +2769,7 @@
     const steps = dedupeFixPlanSteps([
       locatorStep,
       template.action,
-      ...buildTemplateFollowUpSteps(template),
+      ...buildTemplateFollowUpSteps(template, issueSearchableText),
     ]);
 
     return {
@@ -2567,14 +2778,111 @@
     };
   }
 
-  function buildTemplateFollowUpSteps(template) {
+  function buildTemplateFollowUpSteps(template, issueSearchableText) {
     if (!template || !Array.isArray(template.followUpActions)) {
       return [];
     }
 
-    return template.followUpActions
-      .map((action) => normalizeOptionalText(action))
-      .filter((action) => action != null);
+    const matchedActions = [];
+    const defaultActions = [];
+    const alwaysActions = [];
+    const seenActionIds = new Set();
+    const searchableText = normalizeOptionalText(issueSearchableText) || "";
+
+    for (const sourceAction of template.followUpActions) {
+      const action = normalizeTemplateFollowUpAction(sourceAction);
+      if (!action || seenActionIds.has(action.id)) {
+        continue;
+      }
+      seenActionIds.add(action.id);
+
+      if (action.always) {
+        alwaysActions.push(action);
+        continue;
+      }
+
+      if (action.pattern && action.pattern.test(searchableText)) {
+        matchedActions.push(action);
+        continue;
+      }
+
+      if (action.defaultWhenNoMatch) {
+        defaultActions.push(action);
+      }
+    }
+
+    const selectedActions = [];
+    if (matchedActions.length) {
+      selectedActions.push(...matchedActions.slice(0, FIX_PLAN_MATCHED_ACTION_LIMIT));
+    } else {
+      selectedActions.push(...defaultActions.slice(0, FIX_PLAN_DEFAULT_ACTION_LIMIT));
+    }
+
+    if (selectedActions.length < FIX_PLAN_DEFAULT_ACTION_LIMIT) {
+      for (const action of defaultActions) {
+        if (selectedActions.some((selected) => selected.id === action.id)) {
+          continue;
+        }
+        selectedActions.push(action);
+        if (selectedActions.length >= FIX_PLAN_DEFAULT_ACTION_LIMIT) {
+          break;
+        }
+      }
+    }
+
+    const maxFollowUpSteps = Math.max(0, FIX_PLAN_MAX_STEPS - 2);
+    const remainingSlots = Math.max(0, maxFollowUpSteps - selectedActions.length);
+    if (remainingSlots > 0 && alwaysActions.length) {
+      selectedActions.push(...alwaysActions.slice(0, remainingSlots));
+    }
+
+    return selectedActions
+      .slice(0, maxFollowUpSteps)
+      .map((action) => action.step);
+  }
+
+  function normalizeTemplateFollowUpAction(sourceAction) {
+    if (typeof sourceAction === "string") {
+      const text = normalizeOptionalText(sourceAction);
+      if (!text) {
+        return null;
+      }
+      const id = text.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+      return {
+        id: id || text,
+        step: text,
+        pattern: null,
+        defaultWhenNoMatch: true,
+        always: false,
+      };
+    }
+
+    if (!sourceAction || typeof sourceAction !== "object") {
+      return null;
+    }
+
+    const step = normalizeOptionalText(sourceAction.step);
+    if (!step) {
+      return null;
+    }
+
+    const normalizedId = normalizeOptionalText(sourceAction.id)
+      || step.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()
+      || step;
+    const pattern = sourceAction.pattern instanceof RegExp ? sourceAction.pattern : null;
+    const always = Boolean(sourceAction.always);
+    const defaultWhenNoMatch = Boolean(
+      sourceAction.defaultWhenNoMatch
+      || (!pattern && !always)
+    );
+
+    return {
+      id: normalizedId,
+      step,
+      pattern,
+      defaultWhenNoMatch,
+      always,
+    };
   }
 
   function dedupeFixPlanSteps(steps) {
@@ -2627,20 +2935,45 @@
     return parsedPage;
   }
 
-  function resolveFixPlanTemplate(issue) {
+  function buildIssueSearchableText(issue) {
     const categories = getIssueCategories(issue);
-    const searchableParts = [
+    const sourceEvidence = issue && issue.rule_evidence && typeof issue.rule_evidence === "object"
+      ? issue.rule_evidence
+      : null;
+    const sourceEntries = sourceEvidence && Array.isArray(sourceEvidence.entries)
+      ? sourceEvidence.entries
+      : [];
+    const sourceEntryParts = sourceEntries.flatMap((entry) => [
+      entry && entry.type,
+      entry && entry.status,
+      entry && entry.location,
+      entry && entry.message,
+    ]);
+
+    return [
       issue && issue.rule_id,
       issue && issue.message,
       issue && issue.location,
+      issue && issue.severity,
       ...categories,
-    ];
-    const searchableText = searchableParts
+      sourceEvidence && sourceEvidence.specification,
+      sourceEvidence && sourceEvidence.clause,
+      sourceEvidence && sourceEvidence.testNumber,
+      sourceEvidence && sourceEvidence.description,
+      sourceEvidence && sourceEvidence.test,
+      sourceEvidence && sourceEvidence.object,
+      ...sourceEntryParts,
+    ]
       .filter((part) => part != null && String(part).trim() !== "")
       .join(" ");
+  }
+
+  function resolveFixPlanTemplate(issue, searchableText) {
+    const normalizedSearchableText = normalizeOptionalText(searchableText)
+      || buildIssueSearchableText(issue);
 
     for (const template of FIX_PLAN_TEMPLATES) {
-      if (template.pattern.test(searchableText)) {
+      if (template.pattern.test(normalizedSearchableText)) {
         return template;
       }
     }
