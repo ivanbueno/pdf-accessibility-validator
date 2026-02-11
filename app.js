@@ -5,7 +5,7 @@
     // Leave empty to disable analytics tracking.
     gaMeasurementId: "G-N43MCS8JPD",
   };
-  const MAX_UPLOAD_MB = 3;
+  const MAX_UPLOAD_MB = 10;
   const MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024;
   const GA_MEASUREMENT_ID_PATTERN = /^G-[A-Z0-9]+$/i;
   const ANALYTICS_EVENT_NAME_PATTERN = /^[a-z][a-z0-9_]{0,39}$/;
