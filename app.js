@@ -49,46 +49,102 @@
   const RUN_TRACK_RECORD_MAX_HISTORY = 30;
   const RUN_PROFILE_ORDER = ["pdfua-1", "wcag-2-2-complete.xml"];
   const COMPLIANCE_ERROR_WEIGHT = 0.5;
+  const FIX_PLAN_MAX_STEPS = 6;
+  // Action guidance is phrased to stay tool-agnostic across remediation workflows.
   const FIX_PLAN_TEMPLATES = [
     {
       pattern: /\b(metadata|xmp|title|language|lang|viewer|displaydoctitle)\b/i,
       summary: "Document-level accessibility metadata is incomplete or inconsistent.",
-      action: "Set document title, primary language, and related viewer metadata so assistive tech announces the document correctly.",
+      action: "Set document title and primary language so assistive technology announces the document correctly.",
+      followUpActions: [
+        "Align document metadata fields so title and language values are consistent.",
+        "Configure reader preferences to show the document title instead of the file name.",
+        "Declare language changes for passages in other languages.",
+        "Confirm metadata is encoded correctly and not empty placeholders.",
+        "Reopen the PDF in a reader and verify title and language are exposed to assistive technology.",
+      ],
     },
     {
       pattern: /\b(structure|tag|tagged|parent|child|rolemap|heading|paragraph|reading order)\b/i,
       summary: "The semantic structure tree needs correction.",
       action: "Repair the tag hierarchy so headings, paragraphs, lists, and sections follow a valid parent-child order.",
+      followUpActions: [
+        "Apply consistent heading levels and semantic roles across the structure tree.",
+        "Fix broken structural references and invalid role mappings.",
+        "Verify list and section containers are nested correctly without skipped levels.",
+        "Reorder tags to match the intended reading sequence.",
+        "Mark purely decorative or layout-only elements as artifacts.",
+      ],
     },
     {
       pattern: /\b(table|th|td|header cell|scope|rowspan|colspan)\b/i,
       summary: "Table semantics or header associations are broken.",
       action: "Tag the table structure correctly and associate header cells with data cells using proper scope or ID references.",
+      followUpActions: [
+        "Confirm header cells are explicitly identified and mapped to related data cells.",
+        "Add a short table summary when extra context is needed to interpret the data.",
+        "Ensure each table row contains valid header/data cell structure.",
+        "For complex tables, use explicit header associations instead of positional assumptions.",
+        "Verify merged cells do not break announced header context.",
+      ],
     },
     {
       pattern: /\b(figure|image|alt text|alternate text|artifact)\b/i,
       summary: "Image semantics need alternative-text remediation.",
       action: "Add meaningful alternate text to informative images and mark decorative graphics as artifacts.",
+      followUpActions: [
+        "Provide text equivalents for symbols or visual-only content that conveys meaning.",
+        "Keep alternate text concise and focused on purpose, not visual styling.",
+        "Avoid duplicating nearby caption text unless needed for understanding.",
+        "Mark repeated decorative icons, borders, and spacers as artifacts.",
+        "Check that informative figures remain in reading order and are not hidden from assistive technology.",
+      ],
     },
     {
       pattern: /\b(form|field|annotation|widget|label|tooltip|link)\b/i,
       summary: "Interactive content lacks accessible properties.",
       action: "Ensure fields, annotations, and links are tagged and include accessible labels or text equivalents.",
+      followUpActions: [
+        "Set clear accessible names and descriptions for each form control and annotation.",
+        "Confirm links expose meaningful purpose and are correctly represented in the structure tree.",
+        "Verify keyboard navigation order follows a logical reading sequence.",
+        "Ensure required fields, errors, and instructions are programmatically conveyed.",
+        "Confirm annotation popups and comments include usable text alternatives where applicable.",
+      ],
     },
     {
       pattern: /\b(font|unicode|cmap|encoding|glyph|text extraction)\b/i,
       summary: "Text encoding or font mapping is preventing reliable screen-reader output.",
       action: "Embed fonts and repair Unicode mappings (ToUnicode/CMap) so extracted text matches visual text.",
+      followUpActions: [
+        "Ensure every visible glyph maps to the correct Unicode text output.",
+        "Check extracted text spacing and reading order for accuracy.",
+        "Replace or remediate fonts that produce ambiguous character mappings.",
+        "Validate that ligatures and special symbols extract to expected characters.",
+        "Spot-check copy/paste output on affected pages to confirm text fidelity.",
+      ],
     },
     {
       pattern: /\b(color|contrast|readability)\b/i,
       summary: "Visual readability requirements may not be met.",
       action: "Adjust color contrast and visual styling so text remains perceivable across expected reading conditions.",
+      followUpActions: [
+        "Recheck contrast for text, non-text graphics, and interactive states after styling changes.",
+        "Do not rely on color alone to communicate state, meaning, or required actions.",
+        "Confirm focus indicators and link styling remain visible against nearby backgrounds.",
+        "Re-test readability at increased zoom and common reflow scenarios.",
+      ],
     },
   ];
   const DEFAULT_FIX_PLAN_TEMPLATE = {
     summary: "This issue requires targeted remediation for the failing rule.",
-    action: "Apply the fix required by this rule in your remediation tool, then keep the structural semantics consistent.",
+    action: "Apply the fix required by this rule, then keep the structural semantics consistent.",
+    followUpActions: [
+      "Correct the related tags and object properties tied to the failing rule.",
+      "Re-run validation and confirm the issue is resolved without introducing regressions.",
+      "Review neighboring content to ensure similar defects are remediated consistently.",
+      "Perform a quick manual check with keyboard navigation and screen-reader output.",
+    ],
   };
   let loadingActionTimer = null;
   let loadingActionIndex = 0;
@@ -2499,14 +2555,52 @@
     const summary = ruleId
       ? `${template.summary} Rule: ${ruleId}.`
       : template.summary;
+    const steps = dedupeFixPlanSteps([
+      locatorStep,
+      template.action,
+      ...buildTemplateFollowUpSteps(template),
+    ]);
 
     return {
       summary,
-      steps: [
-        locatorStep,
-        template.action,
-      ],
+      steps,
     };
+  }
+
+  function buildTemplateFollowUpSteps(template) {
+    if (!template || !Array.isArray(template.followUpActions)) {
+      return [];
+    }
+
+    return template.followUpActions
+      .map((action) => normalizeOptionalText(action))
+      .filter((action) => action != null);
+  }
+
+  function dedupeFixPlanSteps(steps) {
+    const uniqueSteps = [];
+    const seen = new Set();
+
+    for (const step of steps) {
+      const text = normalizeOptionalText(step);
+      if (!text) {
+        continue;
+      }
+
+      const stepKey = text.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+      if (!stepKey || seen.has(stepKey)) {
+        continue;
+      }
+
+      seen.add(stepKey);
+      uniqueSteps.push(text);
+
+      if (uniqueSteps.length >= FIX_PLAN_MAX_STEPS) {
+        break;
+      }
+    }
+
+    return uniqueSteps;
   }
 
   function buildIssueLocatorStep(issue) {
