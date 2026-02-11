@@ -2194,6 +2194,7 @@
 
   function renderBreakdown(renderRoot, issues, activeCategory) {
     const categoryList = renderRoot.querySelector(".category-list");
+    const breakdownGrid = renderRoot.querySelector(".breakdown-grid");
     if (!categoryList) {
       return;
     }
@@ -2204,6 +2205,11 @@
       UNCATEGORIZED_CATEGORY,
     );
 
+    const hasCategories = Object.keys(categoryCounts).length > 0;
+    if (breakdownGrid) {
+      breakdownGrid.hidden = !hasCategories;
+    }
+    categoryList.hidden = !hasCategories;
     categoryList.innerHTML = buildChipList(categoryCounts, activeCategory);
   }
 
@@ -2215,15 +2221,24 @@
     }
 
     if (!issues.length) {
+      if (activeCategory == null) {
+        details.hidden = true;
+        details.open = false;
+        issuesBody.innerHTML = "";
+        return;
+      }
+
       const categoryLabel = activeCategory == null ? null : getCategoryLabel(activeCategory);
       const filterMessage = activeCategory == null
         ? " for this profile"
         : ` for category "${escapeHtml(categoryLabel)}"`;
       issuesBody.innerHTML = `<tr><td colspan="5">No issues found${filterMessage}.</td></tr>`;
+      details.hidden = false;
       details.open = true;
       return;
     }
 
+    details.hidden = false;
     const sortedIssues = [...issues].sort((left, right) => {
       return getIssueFailedChecks(right) - getIssueFailedChecks(left);
     });
@@ -2538,7 +2553,7 @@
   function buildChipList(counts, activeCategory) {
     const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
     if (!entries.length) {
-      return "<li>none</li>";
+      return "";
     }
 
     return entries
