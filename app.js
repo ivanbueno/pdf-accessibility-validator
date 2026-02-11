@@ -8,6 +8,9 @@
   const MAX_UPLOAD_MB = 3;
   const MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024;
   const GA_MEASUREMENT_ID_PATTERN = /^G-[A-Z0-9]+$/i;
+  const ANALYTICS_EVENT_NAME_PATTERN = /^[a-z][a-z0-9_]{0,39}$/;
+  const ANALYTICS_PARAM_NAME_PATTERN = /^[a-z][a-z0-9_]{0,39}$/;
+  const ANALYTICS_MAX_PARAM_VALUE_LENGTH = 100;
   const LOADING_ACTIONS = [
     "Preparing the PDF for validation...",
     "Checking PDF container syntax and document flags...",
@@ -105,7 +108,10 @@
   modeTabs.forEach((tab) => {
     tab.addEventListener("click", () => {
       const mode = tab.dataset.mode || "upload";
-      setSelectedMode(mode);
+      setSelectedMode(mode, {
+        trackChange: true,
+        changeSource: "click",
+      });
     });
     tab.addEventListener("keydown", handleModeTabKeydown);
   });
@@ -170,23 +176,38 @@
     }
   });
 
-  setSelectedMode(inputModeField.value || "url");
+  setSelectedMode(inputModeField.value || "url", {
+    trackChange: false,
+  });
   renderApiInstructions();
   if (currentYear) {
     currentYear.textContent = String(new Date().getFullYear());
   }
 
-  function setSelectedMode(mode) {
-    inputModeField.value = mode;
+  function setSelectedMode(mode, options) {
+    const normalizedMode = mode === "upload" ? "upload" : "url";
+    const previousMode = getSelectedMode();
+    inputModeField.value = normalizedMode;
 
     modeTabs.forEach((tab) => {
-      const isActive = tab.dataset.mode === mode;
+      const isActive = tab.dataset.mode === normalizedMode;
       tab.classList.toggle("is-active", isActive);
       tab.setAttribute("aria-selected", String(isActive));
       tab.tabIndex = isActive ? 0 : -1;
     });
 
     syncModePanels();
+
+    if (
+      options
+      && options.trackChange
+      && previousMode !== normalizedMode
+    ) {
+      trackEvent("input_mode_changed", {
+        input_mode: normalizedMode,
+        change_source: normalizeOptionalText(options.changeSource) || "unknown",
+      });
+    }
   }
 
   function handleModeTabKeydown(event) {
@@ -216,7 +237,10 @@
     }
 
     nextTab.focus();
-    setSelectedMode(nextTab.dataset.mode || "upload");
+    setSelectedMode(nextTab.dataset.mode || "upload", {
+      trackChange: true,
+      changeSource: "keyboard",
+    });
   }
 
   function syncModePanels() {
@@ -1027,6 +1051,11 @@
       return;
     }
 
+    trackEvent("run_delta_navigation", {
+      direction,
+      comparison_index: activeRunDeltaComparisonIndex,
+      max_comparison_index: maxIndex,
+    });
     rerenderRunDeltaSection({ expanded: true });
   }
 
@@ -2808,7 +2837,103 @@
     if (typeof window.gtag !== "function") {
       return;
     }
-    window.gtag("event", eventName, params || {});
+
+    const normalizedEventName = normalizeAnalyticsEventName(eventName);
+    if (!normalizedEventName) {
+      return;
+    }
+
+    const eventParams = buildAnalyticsEventParams(params);
+    window.gtag("event", normalizedEventName, eventParams);
+  }
+
+  function normalizeAnalyticsEventName(value) {
+    const normalized = normalizeOptionalText(value);
+    if (!normalized) {
+      return "";
+    }
+
+    const safeName = normalized
+      .toLowerCase()
+      .replace(/[^a-z0-9_]+/g, "_")
+      .replace(/^_+|_+$/g, "")
+      .slice(0, 40);
+    if (!ANALYTICS_EVENT_NAME_PATTERN.test(safeName)) {
+      return "";
+    }
+    return safeName;
+  }
+
+  function normalizeAnalyticsParamName(value) {
+    const normalized = normalizeOptionalText(value);
+    if (!normalized) {
+      return "";
+    }
+
+    const safeName = normalized
+      .toLowerCase()
+      .replace(/[^a-z0-9_]+/g, "_")
+      .replace(/^_+|_+$/g, "")
+      .slice(0, 40);
+    if (!ANALYTICS_PARAM_NAME_PATTERN.test(safeName)) {
+      return "";
+    }
+    return safeName;
+  }
+
+  function normalizeAnalyticsParamValue(value) {
+    if (value == null) {
+      return null;
+    }
+
+    if (typeof value === "string") {
+      const normalized = normalizeOptionalText(value);
+      if (!normalized) {
+        return null;
+      }
+      return normalized.slice(0, ANALYTICS_MAX_PARAM_VALUE_LENGTH);
+    }
+
+    if (typeof value === "number") {
+      return Number.isFinite(value) ? value : null;
+    }
+
+    if (typeof value === "boolean") {
+      return value ? 1 : 0;
+    }
+
+    return null;
+  }
+
+  function buildAnalyticsEventParams(params) {
+    const eventParams = {
+      app_surface: "spa",
+    };
+
+    const pagePath = normalizeOptionalText(`${window.location.pathname}${window.location.search}`);
+    if (pagePath) {
+      eventParams.page_path = pagePath.slice(0, ANALYTICS_MAX_PARAM_VALUE_LENGTH);
+    }
+
+    const pageTitle = normalizeOptionalText(document.title);
+    if (pageTitle) {
+      eventParams.page_title = pageTitle.slice(0, ANALYTICS_MAX_PARAM_VALUE_LENGTH);
+    }
+
+    if (!params || typeof params !== "object" || Array.isArray(params)) {
+      return eventParams;
+    }
+
+    Object.entries(params).forEach(([rawName, rawValue]) => {
+      const name = normalizeAnalyticsParamName(rawName);
+      const value = normalizeAnalyticsParamValue(rawValue);
+      if (!name || value == null) {
+        return;
+      }
+      eventParams[name] = value;
+    });
+
+    return eventParams;
   }
 
   async function copyText(text) {
