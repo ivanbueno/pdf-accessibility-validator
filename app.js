@@ -2513,7 +2513,7 @@
       const filterMessage = activeCategory == null
         ? " for this profile"
         : ` for category "${escapeHtml(categoryLabel)}"`;
-      issuesBody.innerHTML = `<tr><td colspan="5">No issues found${filterMessage}.</td></tr>`;
+      issuesBody.innerHTML = `<tr><td colspan="4">No issues found${filterMessage}.</td></tr>`;
       details.hidden = false;
       details.open = true;
       return;
@@ -2534,22 +2534,26 @@
           <td>${escapeHtml(issue.severity || "")}</td>
           <td>${escapeHtml(issue.rule_id || "-")}</td>
           <td>${issue.page == null ? "-" : Number(issue.page)}</td>
-          <td>${renderIssueCategoryPills(issue)}</td>
         </tr>
         <tr class="issue-message-row ${stripeClass}">
-          <td colspan="5">
+          <td colspan="4">
             <div class="issue-message">${escapeHtml(issue.message || "")}</div>
           </td>
         </tr>
+        <tr class="issue-category-row ${stripeClass}">
+          <td colspan="4">
+            <div class="issue-category-row-content">${renderIssueCategoryPills(issue)}</div>
+          </td>
+        </tr>
         <tr class="issue-fix-plan-row ${stripeClass}">
-          <td colspan="5">
+          <td colspan="4">
             ${renderIssueFixPlan(issue)}
             ${renderIssueRuleEvidence(issue)}
           </td>
         </tr>
         ${isLastIssue ? "" : `
         <tr class="issue-gap-row" aria-hidden="true">
-          <td colspan="5"></td>
+          <td colspan="4"></td>
         </tr>
         `}
       `;

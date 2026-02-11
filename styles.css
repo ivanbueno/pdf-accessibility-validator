@@ -1896,6 +1896,18 @@ summary {
   border-bottom: 0;
 }
 
+.issues-table .issue-category-row td {
+  padding: 0 0.55rem 0.65rem;
+  border-bottom: 0;
+}
+
+.issue-category-row-content {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
 .issues-table .issue-fix-plan-row td {
   padding: 0 0.55rem 0.72rem;
   border-bottom: 1px solid var(--line);
