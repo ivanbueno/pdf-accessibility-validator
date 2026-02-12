@@ -1165,6 +1165,76 @@ button:disabled {
   min-width: 0;
 }
 
+.result-header-actions {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+}
+
+.explain-issues-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.38rem;
+  border: 1px solid color-mix(in srgb, var(--accent-secondary) 28%, var(--line));
+  border-radius: 999px;
+  padding: 0.42rem 0.86rem;
+  background: color-mix(in srgb, var(--accent-secondary) 12%, #fff);
+  color: var(--accent-secondary-strong);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.explain-issues-icon {
+  width: 0.92rem;
+  height: 0.92rem;
+  fill: currentColor;
+}
+
+.explain-issues-btn:hover:enabled {
+  border-color: color-mix(in srgb, var(--accent-secondary) 45%, var(--line));
+  background: color-mix(in srgb, var(--accent-secondary) 20%, #fff);
+}
+
+.explain-issues-btn:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent-secondary) 55%, #fff);
+  outline-offset: 2px;
+}
+
+.explain-issues-btn:disabled {
+  opacity: 0.55;
+}
+
+.explain-issues-btn.is-loading .explain-issues-label {
+  animation: explain-synth-breathe 1.1s ease-in-out infinite;
+}
+
+.explain-issues-btn.is-loading .explain-issues-icon {
+  animation: explain-synth-spin 1.8s linear infinite;
+}
+
+@keyframes explain-synth-breathe {
+  0% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.55;
+  }
+}
+
+@keyframes explain-synth-spin {
+  from {
+    transform: rotate(0deg) scale(0.98);
+  }
+  to {
+    transform: rotate(360deg) scale(0.98);
+  }
+}
+
 .result-header h2 {
   margin: 0;
   font-size: clamp(1.05rem, 1.8vw, 1.24rem);
@@ -1178,6 +1248,113 @@ button:disabled {
   color: var(--ink-soft);
   font-family: "IBM Plex Mono", monospace;
   font-size: 0.82rem;
+}
+
+.issues-explainer-panel {
+  position: relative;
+  --issues-bg-start: rgba(255, 255, 255, 0.5);
+  --issues-bg-end: rgba(255, 255, 255, 0.16);
+  --issues-pattern-ink: rgba(95, 86, 77, 0.09);
+  --issues-pattern-grain: rgba(255, 255, 255, 0.14);
+  margin: 0;
+  padding: 1.22rem 1.3rem 1.28rem;
+  border: 0;
+  border-top: 1px dashed color-mix(in srgb, var(--ink-soft) 24%, var(--line));
+  background:
+    linear-gradient(180deg, var(--issues-bg-start), var(--issues-bg-end)),
+    radial-gradient(circle at 1px 1px, var(--issues-pattern-ink) 1px, transparent 1.4px),
+    repeating-linear-gradient(-36deg, var(--issues-pattern-grain) 0 2px, transparent 2px 11px);
+  background-size: auto, 13px 13px, auto;
+  background-position: 0 0, 0 0, 0 0;
+  transition: background 0.22s ease, border-color 0.22s ease;
+  animation: issues-explainer-reveal 0.24s ease-out;
+  font-size: 1.02rem;
+}
+
+.issues-explainer-panel p {
+  margin: 0;
+  color: color-mix(in srgb, var(--ink) 25%, var(--ink-soft));
+  font-size: 0.98rem;
+  line-height: 1.62;
+}
+
+.issues-explainer-panel p + p {
+  margin-top: 0.58rem;
+}
+
+#result-panel.result-pass .issues-explainer-panel {
+  --issues-bg-start: rgba(42, 143, 95, 0.11);
+  --issues-bg-end: rgba(42, 143, 95, 0.03);
+  --issues-pattern-ink: rgba(42, 143, 95, 0.14);
+  --issues-pattern-grain: rgba(255, 255, 255, 0.16);
+  border-top-color: color-mix(in srgb, var(--ok) 34%, var(--line));
+}
+
+#result-panel.result-fail .issues-explainer-panel {
+  --issues-bg-start: rgba(181, 63, 44, 0.11);
+  --issues-bg-end: rgba(181, 63, 44, 0.03);
+  --issues-pattern-ink: rgba(181, 63, 44, 0.16);
+  --issues-pattern-grain: rgba(255, 255, 255, 0.16);
+  border-top-color: color-mix(in srgb, var(--fail) 34%, var(--line));
+}
+
+#result-panel.result-mixed .issues-explainer-panel {
+  --issues-bg-start: rgba(169, 127, 20, 0.12);
+  --issues-bg-end: rgba(169, 127, 20, 0.03);
+  --issues-pattern-ink: rgba(169, 127, 20, 0.16);
+  --issues-pattern-grain: rgba(255, 255, 255, 0.15);
+  border-top-color: color-mix(in srgb, var(--mixed) 36%, var(--line));
+}
+
+#result-panel.result-pass .issues-explainer-panel p {
+  color: color-mix(in srgb, var(--ok) 58%, var(--ink-soft));
+}
+
+#result-panel.result-fail .issues-explainer-panel p {
+  color: color-mix(in srgb, var(--fail) 62%, var(--ink-soft));
+}
+
+#result-panel.result-mixed .issues-explainer-panel p {
+  color: color-mix(in srgb, var(--mixed) 66%, var(--ink-soft));
+}
+
+.issues-explainer-status {
+  animation: issues-explainer-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes issues-explainer-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes issues-explainer-pulse {
+  0% {
+    opacity: 0.58;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.58;
+  }
+}
+
+.issues-explainer-panel.is-error {
+  --issues-bg-start: rgba(181, 63, 44, 0.14);
+  --issues-bg-end: rgba(181, 63, 44, 0.04);
+  --issues-pattern-ink: rgba(181, 63, 44, 0.18);
+  --issues-pattern-grain: rgba(255, 255, 255, 0.18);
+  border-top-color: color-mix(in srgb, var(--fail) 42%, var(--line));
+}
+
+.issues-explainer-panel.is-error p {
+  color: color-mix(in srgb, var(--fail) 64%, var(--ink-soft));
 }
 
 .badge {
@@ -2008,6 +2185,19 @@ summary {
   }
 
   .form-panel.is-loading::after {
+    animation: none;
+  }
+
+  .explain-issues-btn.is-loading .explain-issues-label,
+  .explain-issues-btn.is-loading .explain-issues-icon {
+    animation: none;
+  }
+
+  .issues-explainer-panel {
+    animation: none;
+  }
+
+  .issues-explainer-status {
     animation: none;
   }
 }

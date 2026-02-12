@@ -1,6 +1,8 @@
 (() => {
+  const API_BASE_URL_STORAGE_KEY = "pdf-audit.api-base-url.v1";
+  const DEFAULT_API_BASE_URL = "https://e3pyeerkgstf2covgz2yjkvj2m0bnqiq.lambda-url.us-east-1.on.aws";
   const APP_CONFIG = {
-    apiBaseUrl: "https://e3pyeerkgstf2covgz2yjkvj2m0bnqiq.lambda-url.us-east-1.on.aws",
+    apiBaseUrl: resolveApiBaseUrl(DEFAULT_API_BASE_URL),
     // Set your GA4 Measurement ID (for example: G-ABC123XYZ9).
     // Leave empty to disable analytics tracking.
     gaMeasurementId: "G-N43MCS8JPD",
@@ -382,6 +384,7 @@
   let runSnapshotStore = loadRunSnapshotStoreFromStorage();
   let activeRunDeltaKey = RUN_DELTA_DEFAULT_KEY;
   let activeRunDeltaComparisonIndex = 0;
+  let failedProfilesForIssueExplanation = [];
 
   initAnalytics(APP_CONFIG.gaMeasurementId);
   setupUploadDropzone();
@@ -405,6 +408,12 @@
     const runDeltaNavButton = target.closest(".run-delta-nav-btn");
     if (runDeltaNavButton) {
       handleRunDeltaNavigation(runDeltaNavButton);
+      return;
+    }
+
+    const explainIssuesButton = target.closest(".explain-issues-btn");
+    if (explainIssuesButton) {
+      handleExplainIssuesClick(explainIssuesButton);
       return;
     }
 
@@ -818,6 +827,9 @@
     activeRunDeltaKey = runDeltaKey;
     activeRunDeltaComparisonIndex = nextRunHistory.length >= 2 ? nextRunHistory.length - 1 : 0;
     const runDeltaModel = buildRunDeltaModelFromHistory(nextRunHistory, activeRunDeltaComparisonIndex);
+    const isExplainActionVisible = overallState === "mixed" || overallState === "fail";
+    failedProfilesForIssueExplanation = buildFailedProfilesForIssueExplanation(normalizedResults);
+    const hasExplainableFailedProfiles = failedProfilesForIssueExplanation.length > 0;
 
     const headerHtml = `
       <div class="result-header">
@@ -825,7 +837,28 @@
           <h2>Validation Results</h2>
           <span class="badge overall-badge ${overallBadgeClass}">${overallBadgeText}</span>
         </div>
+        ${isExplainActionVisible ? `
+          <div class="result-header-actions">
+            <button
+              type="button"
+              class="explain-issues-btn"
+              aria-controls="issues-explainer-panel"
+              ${hasExplainableFailedProfiles ? "" : "disabled"}
+            >
+              <svg
+                class="explain-issues-icon"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+                focusable="false"
+              >
+                <path d="M12 2.5 14.2 8l5.8 2.2-5.8 2.2L12 18l-2.2-5.6L4 10.2 9.8 8Zm7.2 10 1 2.6 2.8 1-2.8 1-1 2.6-1-2.6-2.8-1 2.8-1ZM4.8 14.8 6 18l3.2 1.2L6 20.4l-1.2 3.1-1.2-3.1L.4 19.2 3.6 18Z"/>
+              </svg>
+              <span class="explain-issues-label">Explain</span>
+            </button>
+          </div>
+        ` : ""}
       </div>
+      ${isExplainActionVisible ? '<section id="issues-explainer-panel" class="issues-explainer-panel hidden" aria-live="polite"></section>' : ""}
       ${renderRunDelta(runDeltaModel)}
       <div class="profile-grid" id="profile-grid"></div>
       <p class="result-meta">${escapeHtml(data.disclaimer || "")}</p>
@@ -870,6 +903,152 @@
 
     runSnapshotStore[runDeltaKey] = nextRunHistory;
     saveRunSnapshotStoreToStorage(runSnapshotStore);
+  }
+
+  function buildFailedProfilesForIssueExplanation(normalizedResults) {
+    if (!Array.isArray(normalizedResults)) {
+      return [];
+    }
+
+    return normalizedResults
+      .filter(({ profileResult }) => profileResult && profileResult.passed === false)
+      .map(({ profileResult }) => {
+        const raw = normalizeRawOutputForIssueExplanation(profileResult && profileResult.raw);
+        if (!raw) {
+          return null;
+        }
+
+        return {
+          profile: normalizeOptionalText(profileResult && profileResult.profile) || "unknown-profile",
+          raw,
+        };
+      })
+      .filter(Boolean);
+  }
+
+  function normalizeRawOutputForIssueExplanation(raw) {
+    if (raw == null) {
+      return "";
+    }
+
+    if (typeof raw === "string") {
+      return raw.trim();
+    }
+
+    try {
+      return JSON.stringify(raw);
+    } catch (_error) {
+      return String(raw).trim();
+    }
+  }
+
+  async function handleExplainIssuesClick(button) {
+    const explanationPanel = document.getElementById("issues-explainer-panel");
+    if (!failedProfilesForIssueExplanation.length) {
+      renderIssueExplanationError(explanationPanel, "No failed profile raw output is available to summarize.");
+      return;
+    }
+
+    const lambdaBaseUrl = normalizeLambdaBaseUrl(APP_CONFIG.apiBaseUrl);
+    if (!lambdaBaseUrl) {
+      renderIssueExplanationError(explanationPanel, "Configure APP_CONFIG.apiBaseUrl in web/app.js with your Lambda/API base URL.");
+      return;
+    }
+
+    const explainIssuesUrl = buildExplainIssuesUrl(lambdaBaseUrl);
+    setExplainButtonLoadingState(button, true);
+    renderIssueExplanationStatus(explanationPanel, "Analyzing the XML validation report and synthesizing key issues...");
+
+    trackEvent("explain_issues_started", {
+      profile_count: failedProfilesForIssueExplanation.length,
+    });
+
+    try {
+      const response = await requestJson(explainIssuesUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          failed_profiles: failedProfilesForIssueExplanation,
+        }),
+      });
+      renderIssueExplanationSummary(explanationPanel, response && response.summary);
+      trackEvent("explain_issues_succeeded", {
+        profile_count: failedProfilesForIssueExplanation.length,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      renderIssueExplanationError(explanationPanel, message || "Could not summarize issues.");
+      trackEvent("explain_issues_failed", {
+        profile_count: failedProfilesForIssueExplanation.length,
+      });
+    } finally {
+      setExplainButtonLoadingState(button, false);
+    }
+  }
+
+  function setExplainButtonLoadingState(button, isLoading) {
+    const labelNode = button.querySelector(".explain-issues-label");
+    const labelText = labelNode ? labelNode.textContent : button.textContent;
+    const defaultLabel = button.dataset.defaultLabel || labelText || "Explain";
+    button.dataset.defaultLabel = defaultLabel;
+
+    button.disabled = Boolean(isLoading);
+    button.classList.toggle("is-loading", Boolean(isLoading));
+    const nextLabel = isLoading ? "Synthesizing..." : defaultLabel;
+    if (labelNode) {
+      labelNode.textContent = nextLabel;
+      return;
+    }
+    button.textContent = nextLabel;
+  }
+
+  function renderIssueExplanationStatus(explanationPanel, message) {
+    if (!explanationPanel) {
+      return;
+    }
+
+    explanationPanel.classList.remove("hidden", "is-error");
+    explanationPanel.innerHTML = `
+      <p class="issues-explainer-status">${escapeHtml(message || "Analyzing XML validation report...")}</p>
+    `;
+  }
+
+  function renderIssueExplanationSummary(explanationPanel, summary) {
+    if (!explanationPanel) {
+      return;
+    }
+
+    const normalizedSummary = normalizeOptionalText(summary);
+    if (!normalizedSummary) {
+      renderIssueExplanationError(explanationPanel, "The summary service returned an empty summary.");
+      return;
+    }
+
+    const paragraphs = normalizedSummary
+      .split(/\n{2,}/)
+      .map((block) => normalizeOptionalText(block))
+      .filter(Boolean)
+      .map((block) => `<p>${escapeHtml(block).replace(/\n/g, "<br>")}</p>`)
+      .join("");
+
+    explanationPanel.classList.remove("hidden", "is-error");
+    explanationPanel.innerHTML = `
+      ${paragraphs || `<p>${escapeHtml(normalizedSummary)}</p>`}
+    `;
+  }
+
+  function renderIssueExplanationError(explanationPanel, message) {
+    if (!explanationPanel) {
+      return;
+    }
+
+    explanationPanel.classList.remove("hidden");
+    explanationPanel.classList.add("is-error");
+    explanationPanel.innerHTML = `
+      <p>${escapeHtml(message || "Could not summarize issues.")}</p>
+    `;
   }
 
   function compareProfileResultsByPreferredOrder(left, right) {
@@ -3240,6 +3419,7 @@
   }
 
   function clearOutput() {
+    failedProfilesForIssueExplanation = [];
     resultPanel.classList.add("hidden");
     resultPanel.classList.remove("result-pass", "result-fail", "result-mixed");
     errorPanel.classList.add("hidden");
@@ -3247,6 +3427,7 @@
   }
 
   function showError(message) {
+    failedProfilesForIssueExplanation = [];
     resultPanel.classList.add("hidden");
     resultPanel.classList.remove("result-pass", "result-fail", "result-mixed");
     errorPanel.textContent = message;
@@ -3272,6 +3453,16 @@
       return baseUrl;
     }
     return `${baseUrl}/validate`;
+  }
+
+  function buildExplainIssuesUrl(baseUrl) {
+    if (baseUrl.endsWith("/explain-issues")) {
+      return baseUrl;
+    }
+    if (baseUrl.endsWith("/validate")) {
+      return `${baseUrl.slice(0, -"/validate".length)}/explain-issues`;
+    }
+    return `${baseUrl}/explain-issues`;
   }
 
   function renderApiInstructions() {
@@ -3513,6 +3704,65 @@
       return "WCAG 2.2 Profile";
     }
     return profile;
+  }
+
+  function resolveApiBaseUrl(defaultBaseUrl) {
+    const queryOverride = readApiBaseUrlOverrideFromQuery();
+    if (queryOverride) {
+      persistApiBaseUrlOverride(queryOverride);
+      return queryOverride;
+    }
+
+    const storedOverride = readPersistedApiBaseUrlOverride();
+    if (storedOverride) {
+      return storedOverride;
+    }
+
+    return defaultBaseUrl;
+  }
+
+  function readApiBaseUrlOverrideFromQuery() {
+    try {
+      const search = window.location && window.location.search
+        ? window.location.search
+        : "";
+      if (!search) {
+        return "";
+      }
+
+      const query = new URLSearchParams(search);
+      return normalizeLambdaBaseUrl(query.get("apiBaseUrl") || "") || "";
+    } catch (_error) {
+      return "";
+    }
+  }
+
+  function readPersistedApiBaseUrlOverride() {
+    try {
+      if (!window.localStorage) {
+        return "";
+      }
+      const stored = window.localStorage.getItem(API_BASE_URL_STORAGE_KEY) || "";
+      return normalizeLambdaBaseUrl(stored) || "";
+    } catch (_error) {
+      return "";
+    }
+  }
+
+  function persistApiBaseUrlOverride(baseUrl) {
+    const normalizedBaseUrl = normalizeLambdaBaseUrl(baseUrl || "");
+    if (!normalizedBaseUrl) {
+      return;
+    }
+
+    try {
+      if (!window.localStorage) {
+        return;
+      }
+      window.localStorage.setItem(API_BASE_URL_STORAGE_KEY, normalizedBaseUrl);
+    } catch (_error) {
+      // Ignore storage quota/privacy errors.
+    }
   }
 
   function escapeHtml(value) {
