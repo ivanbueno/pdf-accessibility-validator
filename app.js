@@ -385,6 +385,7 @@
   let activeRunDeltaKey = RUN_DELTA_DEFAULT_KEY;
   let activeRunDeltaComparisonIndex = 0;
   let failedProfilesForIssueExplanation = [];
+  let explainIssuesToken = null;
 
   initAnalytics(APP_CONFIG.gaMeasurementId);
   setupUploadDropzone();
@@ -828,6 +829,7 @@
     activeRunDeltaComparisonIndex = nextRunHistory.length >= 2 ? nextRunHistory.length - 1 : 0;
     const runDeltaModel = buildRunDeltaModelFromHistory(nextRunHistory, activeRunDeltaComparisonIndex);
     const isExplainActionVisible = overallState === "mixed" || overallState === "fail";
+    explainIssuesToken = normalizeOptionalText(data && data.explain_issues_token);
     failedProfilesForIssueExplanation = buildFailedProfilesForIssueExplanation(normalizedResults);
     const hasExplainableFailedProfiles = failedProfilesForIssueExplanation.length > 0;
 
@@ -964,11 +966,16 @@
     });
 
     try {
+      const headers = {
+        "Content-Type": "application/json",
+      };
+      if (explainIssuesToken) {
+        headers["X-Explain-Issues-Token"] = explainIssuesToken;
+      }
+
       const response = await requestJson(explainIssuesUrl, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers,
         body: JSON.stringify({
           failed_profiles: failedProfilesForIssueExplanation,
         }),
@@ -3419,6 +3426,7 @@
   }
 
   function clearOutput() {
+    explainIssuesToken = null;
     failedProfilesForIssueExplanation = [];
     resultPanel.classList.add("hidden");
     resultPanel.classList.remove("result-pass", "result-fail", "result-mixed");
@@ -3427,6 +3435,7 @@
   }
 
   function showError(message) {
+    explainIssuesToken = null;
     failedProfilesForIssueExplanation = [];
     resultPanel.classList.add("hidden");
     resultPanel.classList.remove("result-pass", "result-fail", "result-mixed");
