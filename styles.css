@@ -174,14 +174,15 @@ h1 {
   padding: 1.15rem 1.15rem 1.2rem;
 }
 
-.form-panel::after {
-  content: "";
+.form-panel-mascot {
   position: absolute;
   top: 0;
   right: 0;
   bottom: 0;
   width: min(48%, 430px);
-  background: url("./images/owl-full-body.webp") right 1.4rem center / contain no-repeat;
+  height: 100%;
+  object-fit: contain;
+  object-position: calc(100% - 1.4rem) center;
   opacity: 0.22;
   transform: translate3d(0, 0, 0);
   transform-origin: 76% 72%;
@@ -204,7 +205,7 @@ h1 {
     repeating-linear-gradient(0deg, color-mix(in srgb, var(--accent) 55%, #fff) 0 12px, transparent 12px 20px) 0 0 / 2px 220% no-repeat;
 }
 
-.form-panel > * {
+.form-panel > :not(.form-panel-mascot) {
   position: relative;
   z-index: 2;
 }
@@ -218,7 +219,7 @@ h1 {
   animation: border-march 1.6s linear infinite;
 }
 
-.form-panel.is-loading::after {
+.form-panel.is-loading .form-panel-mascot {
   animation: mascot-inspect 2.2s ease-in-out infinite;
 }
 
@@ -262,10 +263,10 @@ h1 {
 }
 
 @media (min-width: 980px) {
-  .form-panel::after {
+  .form-panel-mascot {
     width: min(52%, 500px);
     opacity: 0.28;
-    background-position: right 2rem center;
+    object-position: calc(100% - 2rem) center;
   }
 
   .form-panel form {
@@ -2200,7 +2201,7 @@ summary {
     opacity: 0.7;
   }
 
-  .form-panel.is-loading::after {
+  .form-panel.is-loading .form-panel-mascot {
     animation: none;
   }
 
