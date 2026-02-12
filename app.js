@@ -47,7 +47,6 @@
   const EXPLAIN_BUTTON_ATTENTION_MIN_INTERVAL_MS = 10000;
   const EXPLAIN_BUTTON_ATTENTION_MAX_INTERVAL_MS = 20000;
   const EXPLAIN_BUTTON_ATTENTION_DURATION_MS = 1500;
-  const EXPLAIN_ISSUES_TOKEN_EXPIRY_PATTERN = /(\d{10})$/;
   const UNCATEGORIZED_CATEGORY = "__uncategorized__";
   const UNCATEGORIZED_CATEGORY_LABEL = "uncategorized";
   const RUN_DELTA_STORAGE_KEY = "pdf-audit.run-snapshot.v1";
@@ -2571,62 +2570,75 @@
   }
 
   function parseExplainIssuesTokenExpiry(token) {
+    const tokenPayload = parseExplainIssuesTokenPayload(token);
+    if (!tokenPayload) {
+      return null;
+    }
+
+    const expiresAtSeconds = tokenPayload.exp;
+    if (!Number.isInteger(expiresAtSeconds)) {
+      return null;
+    }
+
+    return {
+      expiresAtMs: expiresAtSeconds * 1000,
+    };
+  }
+
+  function parseExplainIssuesTokenPayload(token) {
     const normalizedToken = normalizeOptionalText(token);
     if (!normalizedToken) {
       return null;
     }
 
-    const match = normalizedToken.match(EXPLAIN_ISSUES_TOKEN_EXPIRY_PATTERN);
-    if (!match) {
+    const tokenSeparatorIndex = normalizedToken.indexOf(".");
+    if (tokenSeparatorIndex <= 0) {
       return null;
     }
 
-    const compactExpiry = match[1];
-    const expiresAtMs = parseCompactUtcExpiryMs(compactExpiry);
-    if (!Number.isFinite(expiresAtMs)) {
+    const tokenPayloadEncoded = normalizedToken.slice(0, tokenSeparatorIndex);
+    const payloadJson = decodeBase64UrlUtf8(tokenPayloadEncoded);
+    if (!payloadJson) {
       return null;
     }
 
-    return {
-      compactExpiry,
-      expiresAtMs,
-    };
+    try {
+      const payload = JSON.parse(payloadJson);
+      if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+        return null;
+      }
+      return payload;
+    } catch (_error) {
+      return null;
+    }
   }
 
-  function parseCompactUtcExpiryMs(compactExpiry) {
-    if (!/^\d{10}$/.test(compactExpiry)) {
-      return Number.NaN;
+  function decodeBase64UrlUtf8(value) {
+    const normalizedValue = normalizeOptionalText(value);
+    if (!normalizedValue) {
+      return null;
     }
 
-    const year = 2000 + Number.parseInt(compactExpiry.slice(0, 2), 10);
-    const month = Number.parseInt(compactExpiry.slice(2, 4), 10);
-    const day = Number.parseInt(compactExpiry.slice(4, 6), 10);
-    const hour = Number.parseInt(compactExpiry.slice(6, 8), 10);
-    const minute = Number.parseInt(compactExpiry.slice(8, 10), 10);
+    const base64Value = normalizedValue.replace(/-/g, "+").replace(/_/g, "/");
+    const paddedBase64Value = `${base64Value}${"=".repeat((4 - (base64Value.length % 4)) % 4)}`;
 
-    if (
-      !Number.isInteger(year)
-      || !Number.isInteger(month)
-      || !Number.isInteger(day)
-      || !Number.isInteger(hour)
-      || !Number.isInteger(minute)
-    ) {
-      return Number.NaN;
+    let decodedBinary;
+    try {
+      decodedBinary = atob(paddedBase64Value);
+    } catch (_error) {
+      return null;
     }
 
-    const expiresAtMs = Date.UTC(year, month - 1, day, hour, minute, 59, 999);
-    const expiryDate = new Date(expiresAtMs);
-    if (
-      expiryDate.getUTCFullYear() !== year
-      || expiryDate.getUTCMonth() !== month - 1
-      || expiryDate.getUTCDate() !== day
-      || expiryDate.getUTCHours() !== hour
-      || expiryDate.getUTCMinutes() !== minute
-    ) {
-      return Number.NaN;
+    const decodedBytes = new Uint8Array(decodedBinary.length);
+    for (let index = 0; index < decodedBinary.length; index += 1) {
+      decodedBytes[index] = decodedBinary.charCodeAt(index);
     }
 
-    return expiresAtMs;
+    try {
+      return new TextDecoder("utf-8", { fatal: true }).decode(decodedBytes);
+    } catch (_error) {
+      return null;
+    }
   }
 
   function getExplainIssuesTokenValidity(token) {
