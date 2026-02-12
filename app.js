@@ -832,6 +832,15 @@
     explainIssuesToken = normalizeOptionalText(data && data.explain_issues_token);
     failedProfilesForIssueExplanation = buildFailedProfilesForIssueExplanation(normalizedResults);
     const hasExplainableFailedProfiles = failedProfilesForIssueExplanation.length > 0;
+    const hasExplainIssuesToken = Boolean(explainIssuesToken);
+
+    trackEvent("validation_features_available", {
+      explain_visible: isExplainActionVisible,
+      explainable_profiles: failedProfilesForIssueExplanation.length,
+      explain_token_present: hasExplainIssuesToken,
+      run_delta_available: Boolean(runDeltaModel && runDeltaModel.available),
+      run_history_count: nextRunHistory.length,
+    });
 
     const headerHtml = `
       <div class="result-header">
@@ -946,14 +955,23 @@
 
   async function handleExplainIssuesClick(button) {
     const explanationPanel = document.getElementById("issues-explainer-panel");
+    const hasExplainIssuesToken = Boolean(explainIssuesToken);
     if (!failedProfilesForIssueExplanation.length) {
       renderIssueExplanationError(explanationPanel, "No failed profile raw output is available to summarize.");
+      trackEvent("explain_issues_blocked", {
+        reason: "no_failed_profiles",
+        explain_token_present: hasExplainIssuesToken,
+      });
       return;
     }
 
     const lambdaBaseUrl = normalizeLambdaBaseUrl(APP_CONFIG.apiBaseUrl);
     if (!lambdaBaseUrl) {
       renderIssueExplanationError(explanationPanel, "Configure APP_CONFIG.apiBaseUrl in web/app.js with your Lambda/API base URL.");
+      trackEvent("explain_issues_blocked", {
+        reason: "missing_api_base_url",
+        explain_token_present: hasExplainIssuesToken,
+      });
       return;
     }
 
@@ -963,6 +981,7 @@
 
     trackEvent("explain_issues_started", {
       profile_count: failedProfilesForIssueExplanation.length,
+      explain_token_present: hasExplainIssuesToken,
     });
 
     try {
@@ -983,12 +1002,18 @@
       renderIssueExplanationSummary(explanationPanel, response && response.summary);
       trackEvent("explain_issues_succeeded", {
         profile_count: failedProfilesForIssueExplanation.length,
+        explain_token_present: hasExplainIssuesToken,
+        summary_length: normalizeOptionalText(response && response.summary)
+          ? normalizeOptionalText(response && response.summary).length
+          : 0,
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       renderIssueExplanationError(explanationPanel, message || "Could not summarize issues.");
       trackEvent("explain_issues_failed", {
         profile_count: failedProfilesForIssueExplanation.length,
+        explain_token_present: hasExplainIssuesToken,
+        failure_reason: classifyExplainIssuesFailure(message),
       });
     } finally {
       setExplainButtonLoadingState(button, false);
@@ -2493,6 +2518,38 @@
 
     const normalized = String(value).trim();
     return normalized ? normalized : null;
+  }
+
+  function classifyExplainIssuesFailure(message) {
+    const normalizedMessage = normalizeOptionalText(message);
+    if (!normalizedMessage) {
+      return "unknown";
+    }
+
+    const lowered = normalizedMessage.toLowerCase();
+    if (lowered.includes("missing explain issues token")) {
+      return "missing_token";
+    }
+    if (lowered.includes("invalid or expired")) {
+      return "invalid_or_expired_token";
+    }
+    if (lowered.includes("openai_api_key")) {
+      return "missing_openai_key";
+    }
+    if (lowered.includes("timed out")) {
+      return "timeout";
+    }
+    if (lowered.includes("network error")) {
+      return "network_error";
+    }
+    if (lowered.includes("non-json response")) {
+      return "non_json_response";
+    }
+    if (lowered.includes("request failed")) {
+      return "request_failed";
+    }
+
+    return "other";
   }
 
   function sumNullableCounts(first, second) {
