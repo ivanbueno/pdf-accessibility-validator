@@ -1288,14 +1288,14 @@ button:disabled {
 
 .issues-explainer-panel {
   position: relative;
-  --issues-bg-start: rgba(255, 255, 255, 0.5);
-  --issues-bg-end: rgba(255, 255, 255, 0.16);
-  --issues-pattern-ink: rgba(95, 86, 77, 0.09);
-  --issues-pattern-grain: rgba(255, 255, 255, 0.14);
+  --issues-bg-start: rgba(23, 107, 136, 0.11);
+  --issues-bg-end: rgba(23, 107, 136, 0.03);
+  --issues-pattern-ink: rgba(23, 107, 136, 0.16);
+  --issues-pattern-grain: rgba(255, 255, 255, 0.18);
   margin: 0;
   padding: 1.22rem 1.3rem 1.28rem;
   border: 0;
-  border-top: 1px dashed color-mix(in srgb, var(--ink-soft) 24%, var(--line));
+  border-top: 1px dashed color-mix(in srgb, var(--accent-secondary) 32%, var(--line));
   background:
     linear-gradient(180deg, var(--issues-bg-start), var(--issues-bg-end)),
     radial-gradient(circle at 1px 1px, var(--issues-pattern-ink) 1px, transparent 1.4px),
@@ -1309,7 +1309,7 @@ button:disabled {
 
 .issues-explainer-panel p {
   margin: 0;
-  color: color-mix(in srgb, var(--ink) 25%, var(--ink-soft));
+  color: color-mix(in srgb, var(--accent-secondary-strong) 58%, var(--ink-soft));
   font-size: 0.98rem;
   line-height: 1.62;
 }
@@ -1318,40 +1318,20 @@ button:disabled {
   margin-top: 0.58rem;
 }
 
-#result-panel.result-pass .issues-explainer-panel {
-  --issues-bg-start: rgba(42, 143, 95, 0.11);
-  --issues-bg-end: rgba(42, 143, 95, 0.03);
-  --issues-pattern-ink: rgba(42, 143, 95, 0.14);
-  --issues-pattern-grain: rgba(255, 255, 255, 0.16);
-  border-top-color: color-mix(in srgb, var(--ok) 34%, var(--line));
-}
-
-#result-panel.result-fail .issues-explainer-panel {
-  --issues-bg-start: rgba(181, 63, 44, 0.11);
-  --issues-bg-end: rgba(181, 63, 44, 0.03);
-  --issues-pattern-ink: rgba(181, 63, 44, 0.16);
-  --issues-pattern-grain: rgba(255, 255, 255, 0.16);
-  border-top-color: color-mix(in srgb, var(--fail) 34%, var(--line));
-}
-
+#result-panel.result-pass .issues-explainer-panel,
+#result-panel.result-fail .issues-explainer-panel,
 #result-panel.result-mixed .issues-explainer-panel {
-  --issues-bg-start: rgba(169, 127, 20, 0.12);
-  --issues-bg-end: rgba(169, 127, 20, 0.03);
-  --issues-pattern-ink: rgba(169, 127, 20, 0.16);
-  --issues-pattern-grain: rgba(255, 255, 255, 0.15);
-  border-top-color: color-mix(in srgb, var(--mixed) 36%, var(--line));
+  --issues-bg-start: rgba(23, 107, 136, 0.13);
+  --issues-bg-end: rgba(23, 107, 136, 0.04);
+  --issues-pattern-ink: rgba(23, 107, 136, 0.18);
+  --issues-pattern-grain: rgba(255, 255, 255, 0.2);
+  border-top-color: color-mix(in srgb, var(--accent-secondary) 36%, var(--line));
 }
 
-#result-panel.result-pass .issues-explainer-panel p {
-  color: color-mix(in srgb, var(--ok) 58%, var(--ink-soft));
-}
-
-#result-panel.result-fail .issues-explainer-panel p {
-  color: color-mix(in srgb, var(--fail) 62%, var(--ink-soft));
-}
-
+#result-panel.result-pass .issues-explainer-panel p,
+#result-panel.result-fail .issues-explainer-panel p,
 #result-panel.result-mixed .issues-explainer-panel p {
-  color: color-mix(in srgb, var(--mixed) 66%, var(--ink-soft));
+  color: color-mix(in srgb, var(--accent-secondary-strong) 62%, var(--ink-soft));
 }
 
 .issues-explainer-status {
@@ -1382,15 +1362,15 @@ button:disabled {
 }
 
 .issues-explainer-panel.is-error {
-  --issues-bg-start: rgba(181, 63, 44, 0.14);
-  --issues-bg-end: rgba(181, 63, 44, 0.04);
-  --issues-pattern-ink: rgba(181, 63, 44, 0.18);
-  --issues-pattern-grain: rgba(255, 255, 255, 0.18);
-  border-top-color: color-mix(in srgb, var(--fail) 42%, var(--line));
+  --issues-bg-start: rgba(15, 79, 102, 0.16);
+  --issues-bg-end: rgba(15, 79, 102, 0.06);
+  --issues-pattern-ink: rgba(15, 79, 102, 0.2);
+  --issues-pattern-grain: rgba(255, 255, 255, 0.2);
+  border-top-color: color-mix(in srgb, var(--accent-secondary-strong) 46%, var(--line));
 }
 
 .issues-explainer-panel.is-error p {
-  color: color-mix(in srgb, var(--fail) 64%, var(--ink-soft));
+  color: color-mix(in srgb, var(--accent-secondary-strong) 72%, var(--ink-soft));
 }
 
 .badge {
