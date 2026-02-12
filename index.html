@@ -11,10 +11,9 @@
       property="og:description"
       content="Validate your PDF for PDF/UA-1, WCAG 2.2, and Section 508 compliance online. Free PDF accessibility checker powered by veraPDF. API available."
     />
-    <meta property="og:image" content="./images/favicon.webp" />
+    <meta property="og:image" content="./images/favicon-256.webp" />
     <title>Free PDF Accessibility Checker | PDF/UA & WCAG Validator Online | PDF Audit</title>
-    <link rel="icon" type="image/webp" sizes="256x256" href="./images/favicon.webp" />
-    <link rel="preload" as="image" type="image/webp" href="./images/owl-full-body.webp" fetchpriority="high" />
+    <link rel="icon" type="image/webp" sizes="256x256" href="./images/favicon-256.webp" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
@@ -28,7 +27,20 @@
       <header class="hero">
         <p class="eyebrow">PDF/UA & WCAG Validator Online</p>
         <a class="hero-title" href="/">
-          <img class="hero-logo" src="./images/favicon.webp" alt="" aria-hidden="true" />
+          <img
+            class="hero-logo"
+            src="./images/favicon-64.webp"
+            srcset="
+              ./images/favicon-64.webp 1x,
+              ./images/favicon-128.webp 2x,
+              ./images/favicon-192.webp 3x
+            "
+            width="64"
+            height="64"
+            alt=""
+            aria-hidden="true"
+            decoding="async"
+          />
           <h1>Free PDF Accessibility Checker API</h1>
         </a>
         <p class="lead">
@@ -39,13 +51,19 @@
       <section class="panel form-panel">
         <img
           class="form-panel-mascot"
-          src="./images/owl-full-body.webp"
+          src="./images/owl-full-body-420.webp"
+          srcset="
+            ./images/owl-full-body-320.webp 320w,
+            ./images/owl-full-body-420.webp 420w,
+            ./images/owl-full-body-532.webp 532w
+          "
+          sizes="(min-width: 980px) 500px, (min-width: 700px) 430px, 306px"
           alt=""
           aria-hidden="true"
-          width="532"
-          height="800"
-          loading="eager"
-          fetchpriority="high"
+          width="420"
+          height="632"
+          loading="lazy"
+          fetchpriority="low"
           decoding="async"
         />
         <h2 class="form-panel-summary">
