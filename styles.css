@@ -1184,6 +1184,8 @@ button:disabled {
   font: inherit;
   font-weight: 600;
   line-height: 1.2;
+  position: relative;
+  will-change: transform, box-shadow;
 }
 
 .explain-issues-icon {
@@ -1198,6 +1200,14 @@ button:disabled {
 
 .explain-issues-btn.is-loading .explain-issues-icon {
   animation: explain-synth-spin 1.8s linear infinite;
+}
+
+.explain-issues-btn.is-attention-pulse {
+  animation: explain-attention-pop 1.5s cubic-bezier(0.22, 1, 0.36, 1) 1;
+}
+
+.explain-issues-btn.is-attention-pulse .explain-issues-icon {
+  animation: explain-attention-icon 1.5s ease-out 1;
 }
 
 @keyframes explain-synth-breathe {
@@ -1218,6 +1228,46 @@ button:disabled {
   }
   to {
     transform: rotate(360deg) scale(0.98);
+  }
+}
+
+@keyframes explain-attention-pop {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(255, 170, 97, 0);
+  }
+  20% {
+    transform: translateY(-1px) scale(1.06);
+    box-shadow: 0 0 0 0.34rem rgba(255, 170, 97, 0.34), 0 0 0 0.9rem rgba(255, 170, 97, 0.18);
+  }
+  42% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0.06rem rgba(255, 170, 97, 0.32), 0 0 0 1.3rem rgba(255, 170, 97, 0);
+  }
+  62% {
+    transform: scale(1.03);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: none;
+  }
+}
+
+@keyframes explain-attention-icon {
+  0% {
+    transform: scale(1) rotate(0deg);
+  }
+  25% {
+    transform: scale(1.26) rotate(14deg);
+  }
+  45% {
+    transform: scale(0.98) rotate(-10deg);
+  }
+  65% {
+    transform: scale(1.1) rotate(6deg);
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
   }
 }
 
@@ -2176,6 +2226,11 @@ summary {
 
   .explain-issues-btn.is-loading .explain-issues-label,
   .explain-issues-btn.is-loading .explain-issues-icon {
+    animation: none;
+  }
+
+  .explain-issues-btn.is-attention-pulse,
+  .explain-issues-btn.is-attention-pulse .explain-issues-icon {
     animation: none;
   }
 

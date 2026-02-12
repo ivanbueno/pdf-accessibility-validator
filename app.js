@@ -44,6 +44,9 @@
     "Finalizing PDF/UA-1 and WCAG profile results...",
   ];
   const LOADING_INTERVAL_MS = 1600;
+  const EXPLAIN_BUTTON_ATTENTION_MIN_INTERVAL_MS = 10000;
+  const EXPLAIN_BUTTON_ATTENTION_MAX_INTERVAL_MS = 20000;
+  const EXPLAIN_BUTTON_ATTENTION_DURATION_MS = 1500;
   const UNCATEGORIZED_CATEGORY = "__uncategorized__";
   const UNCATEGORIZED_CATEGORY_LABEL = "uncategorized";
   const RUN_DELTA_STORAGE_KEY = "pdf-audit.run-snapshot.v1";
@@ -360,6 +363,8 @@
   };
   let loadingActionTimer = null;
   let loadingActionIndex = 0;
+  let explainButtonAttentionTimer = null;
+  let explainButtonAttentionResetTimer = null;
 
   const form = document.getElementById("validator-form");
   const formPanel = document.querySelector(".form-panel");
@@ -880,6 +885,7 @@
     resultPanel.classList.add(resultStateClass);
     resultPanel.classList.remove("hidden");
     animateResultPanel();
+    startExplainButtonAttentionPulseLoop();
 
     const profileGrid = document.getElementById("profile-grid");
     normalizedResults.forEach(({ profileResult, issues }) => {
@@ -1033,6 +1039,12 @@
 
     button.disabled = Boolean(isLoading);
     button.classList.toggle("is-loading", Boolean(isLoading));
+    if (isLoading) {
+      stopExplainButtonAttentionPulseLoop();
+      button.classList.remove("is-attention-pulse");
+    } else {
+      startExplainButtonAttentionPulseLoop();
+    }
     const nextLabel = isLoading ? "Synthesizing..." : defaultLabel;
     if (labelNode) {
       labelNode.textContent = nextLabel;
@@ -1043,8 +1055,10 @@
 
   function setExplainButtonCompletedState(button) {
     const labelNode = button.querySelector(".explain-issues-label");
+    stopExplainButtonAttentionPulseLoop();
     button.disabled = true;
     button.classList.remove("is-loading");
+    button.classList.remove("is-attention-pulse");
 
     if (labelNode) {
       labelNode.textContent = "Explained";
@@ -3499,7 +3513,82 @@
     loadingActionTimer = null;
   }
 
+  function getExplainIssuesButton() {
+    return resultPanel.querySelector(".explain-issues-btn");
+  }
+
+  function shouldPulseExplainButton(button) {
+    return Boolean(button && !button.disabled && !button.classList.contains("is-loading"));
+  }
+
+  function getRandomExplainButtonAttentionDelayMs() {
+    const minDelay = EXPLAIN_BUTTON_ATTENTION_MIN_INTERVAL_MS;
+    const maxDelay = EXPLAIN_BUTTON_ATTENTION_MAX_INTERVAL_MS;
+    return Math.floor(Math.random() * (maxDelay - minDelay + 1)) + minDelay;
+  }
+
+  function triggerExplainButtonAttentionPulse() {
+    const button = getExplainIssuesButton();
+    if (!shouldPulseExplainButton(button)) {
+      return;
+    }
+
+    button.classList.remove("is-attention-pulse");
+    void button.offsetWidth;
+    button.classList.add("is-attention-pulse");
+
+    if (explainButtonAttentionResetTimer != null) {
+      window.clearTimeout(explainButtonAttentionResetTimer);
+    }
+    explainButtonAttentionResetTimer = window.setTimeout(() => {
+      button.classList.remove("is-attention-pulse");
+      explainButtonAttentionResetTimer = null;
+    }, EXPLAIN_BUTTON_ATTENTION_DURATION_MS);
+  }
+
+  function stopExplainButtonAttentionPulseLoop() {
+    if (explainButtonAttentionTimer != null) {
+      window.clearTimeout(explainButtonAttentionTimer);
+      explainButtonAttentionTimer = null;
+    }
+    if (explainButtonAttentionResetTimer != null) {
+      window.clearTimeout(explainButtonAttentionResetTimer);
+      explainButtonAttentionResetTimer = null;
+    }
+
+    const button = getExplainIssuesButton();
+    if (button) {
+      button.classList.remove("is-attention-pulse");
+    }
+  }
+
+  function scheduleNextExplainButtonAttentionPulse() {
+    const button = getExplainIssuesButton();
+    if (!shouldPulseExplainButton(button)) {
+      stopExplainButtonAttentionPulseLoop();
+      return;
+    }
+
+    explainButtonAttentionTimer = window.setTimeout(() => {
+      explainButtonAttentionTimer = null;
+      triggerExplainButtonAttentionPulse();
+      scheduleNextExplainButtonAttentionPulse();
+    }, getRandomExplainButtonAttentionDelayMs());
+  }
+
+  function startExplainButtonAttentionPulseLoop() {
+    stopExplainButtonAttentionPulseLoop();
+
+    const button = getExplainIssuesButton();
+    if (!shouldPulseExplainButton(button)) {
+      return;
+    }
+
+    scheduleNextExplainButtonAttentionPulse();
+  }
+
   function clearOutput() {
+    stopExplainButtonAttentionPulseLoop();
     explainIssuesToken = null;
     failedProfilesForIssueExplanation = [];
     resultPanel.classList.add("hidden");
@@ -3509,6 +3598,7 @@
   }
 
   function showError(message) {
+    stopExplainButtonAttentionPulseLoop();
     explainIssuesToken = null;
     failedProfilesForIssueExplanation = [];
     resultPanel.classList.add("hidden");
