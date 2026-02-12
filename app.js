@@ -47,6 +47,7 @@
   const EXPLAIN_BUTTON_ATTENTION_MIN_INTERVAL_MS = 10000;
   const EXPLAIN_BUTTON_ATTENTION_MAX_INTERVAL_MS = 20000;
   const EXPLAIN_BUTTON_ATTENTION_DURATION_MS = 1500;
+  const EXPLAIN_ISSUES_TOKEN_EXPIRY_PATTERN = /(\d{10})$/;
   const UNCATEGORIZED_CATEGORY = "__uncategorized__";
   const UNCATEGORIZED_CATEGORY_LABEL = "uncategorized";
   const RUN_DELTA_STORAGE_KEY = "pdf-audit.run-snapshot.v1";
@@ -970,6 +971,24 @@
         explain_token_present: hasExplainIssuesToken,
       });
       return;
+    }
+
+    if (explainIssuesToken) {
+      const tokenValidity = getExplainIssuesTokenValidity(explainIssuesToken);
+      if (!tokenValidity.isValid) {
+        const isExpired = tokenValidity.reason === "expired";
+        renderIssueExplanationError(
+          explanationPanel,
+          isExpired
+            ? "Explain issues token expired. Run /validate again."
+            : "Explain issues token is invalid. Run /validate again.",
+        );
+        trackEvent("explain_issues_blocked", {
+          reason: isExpired ? "expired_token" : "invalid_token",
+          explain_token_present: hasExplainIssuesToken,
+        });
+        return;
+      }
     }
 
     const lambdaBaseUrl = normalizeLambdaBaseUrl(APP_CONFIG.apiBaseUrl);
@@ -2549,6 +2568,88 @@
 
     const normalized = String(value).trim();
     return normalized ? normalized : null;
+  }
+
+  function parseExplainIssuesTokenExpiry(token) {
+    const normalizedToken = normalizeOptionalText(token);
+    if (!normalizedToken) {
+      return null;
+    }
+
+    const match = normalizedToken.match(EXPLAIN_ISSUES_TOKEN_EXPIRY_PATTERN);
+    if (!match) {
+      return null;
+    }
+
+    const compactExpiry = match[1];
+    const expiresAtMs = parseCompactUtcExpiryMs(compactExpiry);
+    if (!Number.isFinite(expiresAtMs)) {
+      return null;
+    }
+
+    return {
+      compactExpiry,
+      expiresAtMs,
+    };
+  }
+
+  function parseCompactUtcExpiryMs(compactExpiry) {
+    if (!/^\d{10}$/.test(compactExpiry)) {
+      return Number.NaN;
+    }
+
+    const year = 2000 + Number.parseInt(compactExpiry.slice(0, 2), 10);
+    const month = Number.parseInt(compactExpiry.slice(2, 4), 10);
+    const day = Number.parseInt(compactExpiry.slice(4, 6), 10);
+    const hour = Number.parseInt(compactExpiry.slice(6, 8), 10);
+    const minute = Number.parseInt(compactExpiry.slice(8, 10), 10);
+
+    if (
+      !Number.isInteger(year)
+      || !Number.isInteger(month)
+      || !Number.isInteger(day)
+      || !Number.isInteger(hour)
+      || !Number.isInteger(minute)
+    ) {
+      return Number.NaN;
+    }
+
+    const expiresAtMs = Date.UTC(year, month - 1, day, hour, minute, 59, 999);
+    const expiryDate = new Date(expiresAtMs);
+    if (
+      expiryDate.getUTCFullYear() !== year
+      || expiryDate.getUTCMonth() !== month - 1
+      || expiryDate.getUTCDate() !== day
+      || expiryDate.getUTCHours() !== hour
+      || expiryDate.getUTCMinutes() !== minute
+    ) {
+      return Number.NaN;
+    }
+
+    return expiresAtMs;
+  }
+
+  function getExplainIssuesTokenValidity(token) {
+    const parsedTokenExpiry = parseExplainIssuesTokenExpiry(token);
+    if (!parsedTokenExpiry) {
+      return {
+        isValid: false,
+        reason: "invalid_token",
+      };
+    }
+
+    const nowMs = Date.now();
+    if (parsedTokenExpiry.expiresAtMs < nowMs) {
+      return {
+        isValid: false,
+        reason: "expired",
+      };
+    }
+
+    return {
+      isValid: true,
+      reason: "ok",
+    };
   }
 
   function classifyExplainIssuesFailure(message) {
