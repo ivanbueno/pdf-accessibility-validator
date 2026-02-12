@@ -1174,14 +1174,14 @@ button:disabled {
 .explain-issues-btn {
   display: inline-flex;
   align-items: center;
-  gap: 0.38rem;
-  border: 1px solid color-mix(in srgb, var(--accent-secondary) 28%, var(--line));
-  border-radius: 999px;
-  padding: 0.42rem 0.86rem;
-  background: color-mix(in srgb, var(--accent-secondary) 12%, #fff);
-  color: var(--accent-secondary-strong);
-  font-family: "IBM Plex Mono", monospace;
-  font-size: 0.78rem;
+  justify-content: center;
+  gap: 0.5rem;
+  border: 0;
+  border-radius: 0.75rem;
+  padding: 0.8rem 1.1rem;
+  background: linear-gradient(120deg, var(--accent), var(--accent-strong));
+  color: #fff;
+  font: inherit;
   font-weight: 600;
   line-height: 1.2;
 }
@@ -1190,20 +1190,6 @@ button:disabled {
   width: 0.92rem;
   height: 0.92rem;
   fill: currentColor;
-}
-
-.explain-issues-btn:hover:enabled {
-  border-color: color-mix(in srgb, var(--accent-secondary) 45%, var(--line));
-  background: color-mix(in srgb, var(--accent-secondary) 20%, #fff);
-}
-
-.explain-issues-btn:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--accent-secondary) 55%, #fff);
-  outline-offset: 2px;
-}
-
-.explain-issues-btn:disabled {
-  opacity: 0.55;
 }
 
 .explain-issues-btn.is-loading .explain-issues-label {
