@@ -1163,9 +1163,12 @@
       return null;
     }
 
+    const currentSummary = currentProfile.summary && typeof currentProfile.summary === "object"
+      ? currentProfile.summary
+      : {};
     const hasBaseline = Boolean(previousProfile && typeof previousProfile === "object");
     const summaryDelta = hasBaseline
-      ? buildSummaryDelta(currentProfile.summary, previousProfile.summary)
+      ? buildSummaryDelta(currentSummary, previousProfile.summary)
       : null;
     const issueDelta = hasBaseline
       ? diffIssueKeys(currentProfile.issueKeys, previousProfile.issueKeys)
@@ -1188,6 +1191,14 @@
         : "new",
       currentPassed: Boolean(currentProfile.passed),
       previousPassed: hasBaseline ? Boolean(previousProfile.passed) : null,
+      currentErrors: parseNonNegativeInteger(currentSummary.errors) ?? 0,
+      currentFailedRules: parseNonNegativeInteger(
+        currentSummary.failedRules ?? currentSummary.failed_rules,
+      ) ?? 0,
+      currentCheckedRules: parseNonNegativeInteger(
+        currentSummary.checkedRules ?? currentSummary.checked_rules,
+      ),
+      currentComplianceScore: computeProfileComplianceScore(currentSummary),
       errorsDelta: summaryDelta ? summaryDelta.errorsDelta : null,
       failedRulesDelta: summaryDelta ? summaryDelta.failedRulesDelta : null,
       checkedRulesDelta: summaryDelta ? summaryDelta.checkedRulesDelta : null,
@@ -1674,10 +1685,20 @@
         </header>
         <p class="run-delta-transition">${escapeHtml(transitionLabel)}</p>
         <ul class="run-delta-metric-list">
-          ${renderRunDeltaMetric("Errors", profileDelta.errorsDelta, { direction: "down" })}
-          ${renderRunDeltaMetric("Failed rules", profileDelta.failedRulesDelta, { direction: "down" })}
-          ${renderRunDeltaMetric("Checked rules", profileDelta.checkedRulesDelta, { direction: "neutral" })}
-          ${renderRunDeltaMetric("Compliance score", profileDelta.complianceScoreDelta, { direction: "up", suffix: "%" })}
+          ${renderRunDeltaMetric("Errors", profileDelta.errorsDelta, {
+            direction: "down",
+            currentValue: profileDelta.currentErrors,
+          })}
+          ${renderRunDeltaMetric("Failed rules", profileDelta.failedRulesDelta, {
+            direction: "down",
+            currentValue: profileDelta.currentFailedRules,
+          })}
+          ${renderRunDeltaMetric("Compliance score", profileDelta.complianceScoreDelta, {
+            direction: "up",
+            suffix: "%",
+            currentValue: profileDelta.currentComplianceScore,
+            currentValueFormatter: formatComplianceScore,
+          })}
           ${renderRunDeltaMetric("New issues", profileDelta.newIssues, { direction: "down", showSign: false })}
           ${renderRunDeltaMetric("Resolved issues", profileDelta.resolvedIssues, { direction: "up", showSign: false })}
           ${renderRunDeltaMetric("Unchanged issues", profileDelta.unchangedIssues, { direction: "neutral", showSign: false })}
@@ -1692,11 +1713,19 @@
     const showSign = !options || options.showSign !== false;
     const className = getMetricDeltaClass(value, direction);
     const valueLabel = formatSignedNumber(value, suffix, showSign);
+    const hasCurrentValue = Boolean(
+      options && Object.prototype.hasOwnProperty.call(options, "currentValue"),
+    );
+    const metricValueLabel = hasCurrentValue
+      ? formatCurrentValueWithDeltaPercentage(options.currentValue, value, options)
+      : valueLabel;
 
     return `
       <li>
         <span>${escapeHtml(label)}</span>
-        <strong class="run-delta-pill run-delta-pill-${className}">${escapeHtml(valueLabel)}</strong>
+        <span class="run-delta-metric-values">
+          <strong class="run-delta-pill run-delta-pill-${className}">${escapeHtml(metricValueLabel)}</strong>
+        </span>
       </li>
     `;
   }
@@ -1723,6 +1752,50 @@
 
     const prefix = showSign && value > 0 ? "+" : "";
     return `${prefix}${value}${suffix || ""}`;
+  }
+
+  function formatCurrentMetricValue(value, options) {
+    if (options && typeof options.currentValueFormatter === "function") {
+      return options.currentValueFormatter(value);
+    }
+    if (!Number.isFinite(value)) {
+      return "n/a";
+    }
+
+    const suffix = options && options.currentSuffix ? options.currentSuffix : "";
+    return `${value}${suffix}`;
+  }
+
+  function formatCurrentValueWithDeltaPercentage(currentValue, deltaValue, options) {
+    const currentValueLabel = formatCurrentMetricValue(currentValue, options);
+    const deltaPercentageLabel = formatDeltaPercentageFromDelta(currentValue, deltaValue);
+    return `${currentValueLabel} (${deltaPercentageLabel})`;
+  }
+
+  function formatDeltaPercentageFromDelta(currentValue, deltaValue) {
+    if (!Number.isFinite(currentValue) || !Number.isFinite(deltaValue)) {
+      return "n/a";
+    }
+
+    const previousValue = currentValue - deltaValue;
+    if (!Number.isFinite(previousValue)) {
+      return "n/a";
+    }
+
+    if (previousValue === 0) {
+      return currentValue === 0 ? "0%" : "n/a";
+    }
+
+    const rawPercentage = (deltaValue / previousValue) * 100;
+    const roundedPercentage = roundDelta(rawPercentage, 1);
+    if (!Number.isFinite(roundedPercentage)) {
+      return "n/a";
+    }
+
+    if (Number.isInteger(roundedPercentage)) {
+      return `${roundedPercentage}%`;
+    }
+    return `${roundedPercentage.toFixed(1)}%`;
   }
 
   function roundDelta(value, decimalPlaces) {
