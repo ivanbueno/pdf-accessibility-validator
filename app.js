@@ -956,6 +956,7 @@
   async function handleExplainIssuesClick(button) {
     const explanationPanel = document.getElementById("issues-explainer-panel");
     const hasExplainIssuesToken = Boolean(explainIssuesToken);
+    let hasCompleted = false;
     if (!failedProfilesForIssueExplanation.length) {
       renderIssueExplanationError(explanationPanel, "No failed profile raw output is available to summarize.");
       trackEvent("explain_issues_blocked", {
@@ -1000,6 +1001,8 @@
         }),
       });
       renderIssueExplanationSummary(explanationPanel, response && response.summary);
+      setExplainButtonCompletedState(button);
+      hasCompleted = true;
       trackEvent("explain_issues_succeeded", {
         profile_count: failedProfilesForIssueExplanation.length,
         explain_token_present: hasExplainIssuesToken,
@@ -1016,7 +1019,9 @@
         failure_reason: classifyExplainIssuesFailure(message),
       });
     } finally {
-      setExplainButtonLoadingState(button, false);
+      if (!hasCompleted) {
+        setExplainButtonLoadingState(button, false);
+      }
     }
   }
 
@@ -1034,6 +1039,18 @@
       return;
     }
     button.textContent = nextLabel;
+  }
+
+  function setExplainButtonCompletedState(button) {
+    const labelNode = button.querySelector(".explain-issues-label");
+    button.disabled = true;
+    button.classList.remove("is-loading");
+
+    if (labelNode) {
+      labelNode.textContent = "Explained";
+      return;
+    }
+    button.textContent = "Explained";
   }
 
   function renderIssueExplanationStatus(explanationPanel, message) {
