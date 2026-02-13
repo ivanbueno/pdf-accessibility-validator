@@ -525,7 +525,7 @@ button:disabled {
 
 .upload-jobs-table th:nth-child(2),
 .upload-jobs-table td:nth-child(2) {
-  width: 22.5%;
+  width: 18%;
 }
 
 .upload-jobs-table th:nth-child(3),
@@ -550,7 +550,7 @@ button:disabled {
 
 .upload-jobs-table th:nth-child(7),
 .upload-jobs-table td:nth-child(7) {
-  width: 12%;
+  width: 14%;
 }
 
 .upload-job-row {
@@ -714,7 +714,16 @@ button:disabled {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 0.35rem;
   white-space: nowrap;
+}
+
+.upload-remove-btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 0.9em;
+  line-height: 1;
 }
 
 .upload-remove-btn:hover {
@@ -730,7 +739,7 @@ button:disabled {
 .upload-view-details-btn {
   border: 1px solid color-mix(in srgb, var(--accent) 36%, var(--line));
   border-radius: 0.45rem;
-  padding: 0.42rem 0.8rem;
+  padding: 0.42rem 0.72rem;
   background: color-mix(in srgb, var(--accent) 10%, #fff);
   color: color-mix(in srgb, var(--accent-strong) 78%, #5a1a10);
   font-family: "IBM Plex Mono", monospace;
@@ -740,7 +749,16 @@ button:disabled {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 0.3rem;
   white-space: nowrap;
+}
+
+.upload-view-details-btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 0.9em;
+  line-height: 1;
 }
 
 .upload-view-details-btn.upload-view-details-pass {

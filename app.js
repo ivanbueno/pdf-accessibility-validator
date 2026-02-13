@@ -1385,7 +1385,8 @@
                 data-upload-job-id="${escapeHtml(job.id)}"
                 aria-label="Remove ${escapeHtml(job.name)} from queue"
               >
-                Remove
+                <span class="upload-remove-btn-icon" aria-hidden="true">&times;</span>
+                <span>Remove</span>
               </button>
             `
           : isUploadJobViewDetailsAvailable(job)
@@ -1396,7 +1397,8 @@
                   data-upload-job-id="${escapeHtml(job.id)}"
                   aria-label="View details for ${escapeHtml(job.name)}"
                 >
-                  View Details
+                  <span class="upload-view-details-btn-icon" aria-hidden="true">&rarr;</span>
+                  <span>View Details</span>
                 </button>
               `
           : '<span class="upload-action-placeholder">-</span>';
