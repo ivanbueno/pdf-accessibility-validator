@@ -8,6 +8,7 @@
     gaMeasurementId: "G-N43MCS8JPD",
   };
   const MAX_UPLOAD_MB = 10;
+  const MAX_UPLOAD_FILES = 5;
   const MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024;
   const GA_MEASUREMENT_ID_PATTERN = /^G-[A-Z0-9]+$/i;
   const ANALYTICS_EVENT_NAME_PATTERN = /^[a-z][a-z0-9_]{0,39}$/;
@@ -47,6 +48,7 @@
   const EXPLAIN_BUTTON_ATTENTION_MIN_INTERVAL_MS = 10000;
   const EXPLAIN_BUTTON_ATTENTION_MAX_INTERVAL_MS = 20000;
   const EXPLAIN_BUTTON_ATTENTION_DURATION_MS = 1500;
+  const EXPLAIN_ISSUES_STATE_MAX_HISTORY = 50;
   const UNCATEGORIZED_CATEGORY = "__uncategorized__";
   const UNCATEGORIZED_CATEGORY_LABEL = "uncategorized";
   const RUN_DELTA_STORAGE_KEY = "pdf-audit.run-snapshot.v1";
@@ -385,15 +387,24 @@
   const profileTemplate = document.getElementById("profile-template");
   const uploadDropzone = document.getElementById("upload-dropzone");
   const uploadDropHint = document.getElementById("upload-drop-hint");
-  let pendingUploadFile = null;
+  const uploadJobsPanel = document.getElementById("upload-jobs-panel");
+  const uploadJobsBody = document.getElementById("upload-jobs-body");
+  const uploadSummaryText = document.getElementById("upload-summary-text");
+  const uploadDropHintDefaultText = uploadDropHint ? uploadDropHint.textContent.trim() : "";
+  let pendingUploadFiles = [];
+  let uploadBatchState = null;
   let runSnapshotStore = loadRunSnapshotStoreFromStorage();
   let activeRunDeltaKey = RUN_DELTA_DEFAULT_KEY;
   let activeRunDeltaComparisonIndex = 0;
+  let activeSubmissionMode = "";
   let failedProfilesForIssueExplanation = [];
   let explainIssuesToken = null;
+  const explainedIssuesSummaryByRequestId = new Map();
 
   initAnalytics(APP_CONFIG.gaMeasurementId);
   setupUploadDropzone();
+  setUploadSelectionDisabled(false);
+  setupUploadJobRowKeyboardNavigation();
 
   modeTabs.forEach((tab) => {
     tab.addEventListener("click", () => {
@@ -408,6 +419,33 @@
   document.addEventListener("click", (event) => {
     const target = event.target;
     if (!(target instanceof Element)) {
+      return;
+    }
+
+    const viewDetailsButton = target.closest(".upload-view-details-btn");
+    if (viewDetailsButton) {
+      const uploadJobId = normalizeOptionalText(viewDetailsButton.dataset && viewDetailsButton.dataset.uploadJobId);
+      if (uploadJobId) {
+        selectUploadJob(uploadJobId, {
+          renderDetails: true,
+          selectionSource: "view_details_button",
+        });
+      }
+      return;
+    }
+
+    const removeButton = target.closest(".upload-remove-btn");
+    if (removeButton) {
+      const uploadJobId = normalizeOptionalText(removeButton.dataset && removeButton.dataset.uploadJobId);
+      if (uploadJobId) {
+        removeUploadJob(uploadJobId);
+      }
+      return;
+    }
+
+    const uploadJobRow = target.closest(".upload-job-row");
+    if (uploadJobRow) {
+      handleUploadJobRowSelection(uploadJobRow);
       return;
     }
 
@@ -436,7 +474,6 @@
     clearOutput();
 
     const selectedMode = getSelectedMode();
-    const runDeltaContext = buildRunDeltaContext(selectedMode);
     const lambdaBaseUrl = normalizeLambdaBaseUrl(APP_CONFIG.apiBaseUrl);
 
     if (!lambdaBaseUrl) {
@@ -444,17 +481,31 @@
       return;
     }
 
-    setSubmitting(true);
+    setSubmitting(true, "", selectedMode);
     trackEvent("validate_request_started", {
       input_mode: selectedMode,
+      upload_file_count: selectedMode === "upload" ? getSelectedUploadFiles().length : 0,
     });
 
     try {
       const validateUrl = buildValidateUrl(lambdaBaseUrl);
-      const response = selectedMode === "upload"
-        ? await runFileValidation(validateUrl)
-        : await runUrlValidation(validateUrl);
+      if (selectedMode === "upload") {
+        const batchSummary = await runUploadBatchValidation(validateUrl);
+        trackEvent("validate_request_succeeded", {
+          input_mode: selectedMode,
+          upload_file_count: batchSummary.totalCount,
+          upload_success_count: batchSummary.completedCount,
+          upload_failure_count: batchSummary.failedCount,
+          upload_pass_count: batchSummary.passCount,
+          upload_mixed_count: batchSummary.mixedCount,
+          upload_fail_count: batchSummary.failCount,
+        });
+        setSubmitting(false, formatUploadBatchStatusText(batchSummary));
+        return;
+      }
 
+      const runDeltaContext = buildRunDeltaContext(selectedMode);
+      const response = await runUrlValidation(validateUrl);
       renderResponse(response, runDeltaContext);
       trackEvent("validate_request_succeeded", {
         input_mode: selectedMode,
@@ -482,6 +533,17 @@
 
   function setSelectedMode(mode, options) {
     const normalizedMode = mode === "upload" ? "upload" : "url";
+    if (activeSubmissionMode && normalizedMode !== activeSubmissionMode) {
+      if (options && options.trackChange) {
+        trackEvent("input_mode_change_blocked", {
+          requested_mode: normalizedMode,
+          active_mode: activeSubmissionMode,
+          change_source: normalizeOptionalText(options.changeSource) || "unknown",
+        });
+      }
+      return;
+    }
+
     const previousMode = getSelectedMode();
     inputModeField.value = normalizedMode;
 
@@ -531,6 +593,14 @@
     if (!nextTab) {
       return;
     }
+    if (nextTab.disabled) {
+      trackEvent("input_mode_change_blocked", {
+        requested_mode: nextTab.dataset.mode || "upload",
+        active_mode: activeSubmissionMode || getSelectedMode(),
+        change_source: "keyboard",
+      });
+      return;
+    }
 
     nextTab.focus();
     setSelectedMode(nextTab.dataset.mode || "upload", {
@@ -551,16 +621,18 @@
 
     fileInput.required = showUpload;
     pdfUrlInput.required = !showUpload;
+    syncUploadJobsPanelVisibility();
   }
 
   function getSelectedMode() {
     return inputModeField.value || "upload";
   }
 
-  function buildRunDeltaContext(mode) {
+  function buildRunDeltaContext(mode, sourceLabel) {
     if (mode === "upload") {
-      const uploadFile = getSelectedUploadFile();
-      const uploadName = normalizeOptionalText(uploadFile && uploadFile.name);
+      const selectedFiles = getSelectedUploadFiles();
+      const fallbackName = selectedFiles.length ? selectedFiles[0].name : "";
+      const uploadName = normalizeOptionalText(sourceLabel) || normalizeOptionalText(fallbackName);
       if (!uploadName) {
         return {
           key: RUN_DELTA_DEFAULT_KEY,
@@ -632,31 +704,162 @@
     }
   }
 
-  async function runFileValidation(validateUrl) {
-    const file = getSelectedUploadFile();
-    if (!file) {
-      throw new Error("Select a PDF file to upload.");
+  async function runUploadBatchValidation(validateUrl) {
+    const jobs = getQueuedUploadJobsForRun();
+    if (!jobs.length) {
+      throw new Error("Select at least one PDF file to upload.");
     }
-    if (!isPdfFile(file)) {
-      throw new Error("Only PDF files are accepted.");
-    }
-    if (file.size > MAX_UPLOAD_BYTES) {
-      throw new Error(`PDF upload exceeds ${MAX_UPLOAD_MB} MB limit.`);
+    if (jobs.length > MAX_UPLOAD_FILES) {
+      throw new Error(`Select up to ${MAX_UPLOAD_FILES} PDF files per run.`);
     }
 
-    const pdfBase64 = await fileToBase64(file);
-    const payload = {
-      include_raw: true,
-      pdf_base64: pdfBase64,
+    uploadBatchState = {
+      jobs,
+      selectedJobId: "",
     };
 
-    return requestJson(validateUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
+    // Freeze the run queue used for this batch.
+    pendingUploadFiles = jobs.map((job) => job.file);
+    updateUploadDropHint();
+
+    jobs.forEach((job) => {
+      job.status = "queued";
+      job.progress = 0;
+      job.resultState = "pending";
+      job.summaryText = "Queued";
+      job.errorMessage = "";
+      job.response = null;
     });
+    renderUploadJobsPanel();
+
+    await Promise.all(jobs.map((job) => runUploadValidationJob(validateUrl, job)));
+
+    const summary = summarizeUploadJobs(jobs);
+    const preferredJob = jobs.find((job) => Boolean(job.response))
+      || jobs.find((job) => Boolean(job.errorMessage))
+      || null;
+    if (preferredJob) {
+      selectUploadJob(preferredJob.id, {
+        renderDetails: true,
+        suppressStatusUpdate: true,
+      });
+    }
+    renderUploadJobsPanel();
+
+    return summary;
+  }
+
+  function getQueuedUploadJobsForRun() {
+    if (uploadBatchState && Array.isArray(uploadBatchState.jobs) && uploadBatchState.jobs.length) {
+      const queuedJobs = uploadBatchState.jobs.filter((job) => job.status === "queued");
+      if (queuedJobs.length) {
+        return queuedJobs;
+      }
+    }
+
+    const files = getSelectedUploadFiles();
+    return files.map((file, index) => createUploadJob(file, index));
+  }
+
+  function initializeUploadQueueDraftFromFiles(files) {
+    if (!Array.isArray(files) || !files.length) {
+      clearUploadBatchPanelState();
+      return;
+    }
+
+    const jobs = files.map((file, index) => {
+      const job = createUploadJob(file, index);
+      job.summaryText = "Ready to run";
+      return job;
+    });
+
+    uploadBatchState = {
+      jobs,
+      selectedJobId: "",
+    };
+    renderUploadJobsPanel();
+  }
+
+  function updateUploadSelectionStatusMessage(extraMessages) {
+    const messages = Array.isArray(extraMessages)
+      ? extraMessages.filter((message) => normalizeOptionalText(message))
+      : [];
+
+    if (pendingUploadFiles.length) {
+      messages.push(`${pendingUploadFiles.length} ${pluralize(pendingUploadFiles.length, "file", "files")} ready to validate.`);
+    }
+
+    statusText.textContent = messages.join(" ");
+  }
+
+  function createUploadJob(file, index) {
+    const fallbackName = `upload-${index + 1}.pdf`;
+    const name = normalizeOptionalText(file && file.name) || fallbackName;
+    return {
+      id: `upload-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 8)}`,
+      file,
+      name,
+      size: Number(file && file.size) || 0,
+      progress: 0,
+      status: "queued",
+      resultState: "pending",
+      summaryText: "Queued",
+      errorMessage: "",
+      response: null,
+      snapshotRecorded: false,
+      runDeltaContext: buildRunDeltaContext("upload", name),
+    };
+  }
+
+  async function runUploadValidationJob(validateUrl, job) {
+    try {
+      validateUploadFile(job.file);
+
+      setUploadJobState(job, "reading", 4, "Encoding PDF");
+      const pdfBase64 = await fileToBase64(job.file, (readProgress) => {
+        const progress = interpolateProgress(readProgress, 4, 24);
+        setUploadJobState(job, "reading", progress, "Encoding PDF");
+      });
+
+      const payload = JSON.stringify({
+        include_raw: true,
+        pdf_base64: pdfBase64,
+      });
+
+      setUploadJobState(job, "uploading", 24, "Uploading");
+      const response = await requestJsonWithUploadProgress(
+        validateUrl,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: payload,
+        },
+        (uploadProgress) => {
+          const boundedProgress = clampUploadRatio(uploadProgress);
+          if (boundedProgress >= 1) {
+            setUploadJobState(job, "processing", 92, "Running validation");
+            return;
+          }
+          const progress = interpolateProgress(boundedProgress, 24, 88);
+          setUploadJobState(job, "uploading", progress, "Uploading");
+        },
+      );
+
+      job.response = response;
+      job.errorMessage = "";
+      job.resultState = getOverallResultState(response);
+      job.summaryText = formatUploadJobResultSummary(response);
+      setUploadJobState(job, "completed", 100, job.summaryText);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      job.response = null;
+      job.errorMessage = message;
+      job.resultState = "failed";
+      job.summaryText = message;
+      setUploadJobState(job, "failed", 100, message);
+    }
   }
 
   async function runUrlValidation(validateUrl) {
@@ -674,13 +877,69 @@
     });
   }
 
+  function isUploadSelectionDisabled() {
+    return Boolean(fileInput && fileInput.disabled);
+  }
+
+  function setUploadSelectionDisabled(isDisabled) {
+    const disabled = Boolean(isDisabled);
+    if (fileInput) {
+      fileInput.disabled = disabled;
+    }
+    if (!uploadDropzone) {
+      return;
+    }
+
+    uploadDropzone.classList.toggle("is-disabled", disabled);
+    uploadDropzone.classList.remove("is-dragover");
+    uploadDropzone.setAttribute("aria-disabled", String(disabled));
+    uploadDropzone.tabIndex = disabled ? -1 : 0;
+  }
+
   function setupUploadDropzone() {
     if (!uploadDropzone) {
       return;
     }
 
-    const defaultHint = uploadDropHint ? uploadDropHint.textContent.trim() : "";
     let dragDepth = 0;
+
+    const applyUploadSelection = (filesLike, source) => {
+      const selectedCount = Array.from(filesLike || []).length;
+      if (isUploadSelectionDisabled()) {
+        trackEvent("upload_selection_blocked", {
+          selection_source: normalizeOptionalText(source) || "unknown",
+          selected_count: selectedCount,
+          reason: "validation_running",
+          active_mode: activeSubmissionMode || getSelectedMode(),
+        });
+        return;
+      }
+
+      const baseFiles = getEditableUploadQueueDraftFiles();
+      const availableSlots = Math.max(0, MAX_UPLOAD_FILES - baseFiles.length);
+      const selection = normalizeUploadFileSelection(filesLike, {
+        existingFiles: baseFiles,
+        availableSlots,
+      });
+      const mergedFiles = [...baseFiles, ...selection.files];
+      trackEvent("upload_queue_files_selected", {
+        selection_source: normalizeOptionalText(source) || "unknown",
+        selected_count: selection.selectedCount,
+        added_count: selection.files.length,
+        queue_size: mergedFiles.length,
+        invalid_type_count: selection.invalidTypeCount,
+        oversized_count: selection.oversizedCount,
+        duplicate_count: selection.duplicateCount,
+        dropped_limit_count: selection.droppedDueToLimit,
+        queue_limit_reached: mergedFiles.length >= MAX_UPLOAD_FILES,
+      });
+
+      pendingUploadFiles = mergedFiles;
+      initializeUploadQueueDraftFromFiles(mergedFiles);
+      fileInput.value = "";
+      updateUploadDropHint();
+      updateUploadSelectionStatusMessage(selection.messages);
+    };
 
     const prevent = (event) => {
       event.preventDefault();
@@ -688,10 +947,17 @@
     };
 
     const setDragOver = (isActive) => {
+      if (isUploadSelectionDisabled()) {
+        uploadDropzone.classList.remove("is-dragover");
+        return;
+      }
       uploadDropzone.classList.toggle("is-dragover", isActive);
     };
 
     uploadDropzone.addEventListener("keydown", (event) => {
+      if (isUploadSelectionDisabled()) {
+        return;
+      }
       if (event.key !== "Enter" && event.key !== " ") {
         return;
       }
@@ -728,49 +994,789 @@
         return;
       }
 
-      const file = droppedFiles[0];
-      if (!isPdfFile(file)) {
-        pendingUploadFile = null;
-        updateUploadDropHint(defaultHint);
-        showError("Only PDF files are accepted.");
-        return;
-      }
-      if (file.size > MAX_UPLOAD_BYTES) {
-        pendingUploadFile = null;
-        updateUploadDropHint(defaultHint);
-        showError(`PDF upload exceeds ${MAX_UPLOAD_MB} MB limit.`);
-        return;
-      }
-
-      pendingUploadFile = file;
-      fileInput.value = "";
-      updateUploadDropHint(defaultHint);
+      applyUploadSelection(droppedFiles, "drop");
     });
 
     fileInput.addEventListener("change", () => {
-      pendingUploadFile = null;
-      updateUploadDropHint(defaultHint);
+      applyUploadSelection(fileInput.files, "picker");
     });
 
-    updateUploadDropHint(defaultHint);
+    updateUploadDropHint();
   }
 
-  function getSelectedUploadFile() {
-    return pendingUploadFile || (fileInput.files && fileInput.files[0]) || null;
+  function getEditableUploadQueueDraftFiles() {
+    if (!uploadBatchState || !Array.isArray(uploadBatchState.jobs) || !uploadBatchState.jobs.length) {
+      return [];
+    }
+
+    const allJobsQueued = uploadBatchState.jobs.every((job) => job && job.status === "queued");
+    if (!allJobsQueued) {
+      return [];
+    }
+
+    return uploadBatchState.jobs
+      .map((job) => (job ? job.file : null))
+      .filter((file) => Boolean(file));
   }
 
-  function updateUploadDropHint(defaultHint) {
+  function setupUploadJobRowKeyboardNavigation() {
+    if (!uploadJobsBody) {
+      return;
+    }
+
+    uploadJobsBody.addEventListener("keydown", (event) => {
+      const target = event.target;
+      if (!(target instanceof Element)) {
+        return;
+      }
+      if (target.closest(".upload-remove-btn")) {
+        return;
+      }
+      if (target.closest(".upload-view-details-btn")) {
+        return;
+      }
+
+      if (event.key !== "Enter" && event.key !== " ") {
+        return;
+      }
+
+      const uploadJobRow = target.closest(".upload-job-row");
+      if (!uploadJobRow) {
+        return;
+      }
+
+      event.preventDefault();
+      handleUploadJobRowSelection(uploadJobRow);
+    });
+  }
+
+  function handleUploadJobRowSelection(row) {
+    const uploadJobId = normalizeOptionalText(row && row.dataset ? row.dataset.uploadJobId : "");
+    if (!uploadJobId) {
+      return;
+    }
+
+    selectUploadJob(uploadJobId, {
+      renderDetails: true,
+      scrollToValidationOutput: true,
+      scrollSource: "queue_row",
+      selectionSource: "queue_row",
+    });
+  }
+
+  function removeUploadJob(uploadJobId) {
+    if (!uploadBatchState || !Array.isArray(uploadBatchState.jobs)) {
+      return;
+    }
+
+    const queueSizeBefore = uploadBatchState.jobs.length;
+    const removableJob = uploadBatchState.jobs.find((job) => job.id === uploadJobId);
+    if (!removableJob || !isUploadJobRemovable(removableJob)) {
+      return;
+    }
+    const wasSelected = uploadBatchState.selectedJobId === uploadJobId;
+
+    uploadBatchState.jobs = uploadBatchState.jobs.filter((job) => job.id !== uploadJobId);
+    if (uploadBatchState.selectedJobId === uploadJobId) {
+      uploadBatchState.selectedJobId = "";
+    }
+    const queueSizeAfter = uploadBatchState.jobs.length;
+    trackEvent("upload_queue_file_removed", {
+      queue_size_before: queueSizeBefore,
+      queue_size_after: queueSizeAfter,
+      removed_file_name: normalizeOptionalText(removableJob.name) || "unknown",
+      was_selected: wasSelected,
+    });
+
+    pendingUploadFiles = uploadBatchState.jobs.map((job) => job.file);
+    fileInput.value = "";
+    updateUploadDropHint();
+    updateUploadSelectionStatusMessage([]);
+
+    if (!uploadBatchState.jobs.length) {
+      clearUploadBatchPanelState();
+      return;
+    }
+
+    renderUploadJobsPanel();
+  }
+
+  function isUploadJobRemovable(job) {
+    if (!job || typeof job !== "object") {
+      return false;
+    }
+    return job.status === "queued";
+  }
+
+  function isUploadJobViewDetailsAvailable(job) {
+    if (!job || typeof job !== "object") {
+      return false;
+    }
+    return job.status === "completed" || job.status === "failed";
+  }
+
+  function getUploadJobViewDetailsTone(job) {
+    if (!job || typeof job !== "object") {
+      return "neutral";
+    }
+
+    const resultState = normalizeOptionalText(job.resultState).toLowerCase();
+    if (resultState === "pass" || resultState === "mixed" || resultState === "fail") {
+      return resultState;
+    }
+    if (resultState === "failed" || job.status === "failed") {
+      return "fail";
+    }
+    return "neutral";
+  }
+
+  function getUploadJobResultColumns(job) {
+    const pendingResult = {
+      pdfUaText: "-",
+      pdfUaState: "pending",
+      wcagText: "-",
+      wcagState: "pending",
+      complianceText: "-",
+      errorText: "-",
+      errorState: "pending",
+    };
+
+    if (!job || typeof job !== "object") {
+      return pendingResult;
+    }
+
+    if (job.response) {
+      const summary = getUploadJobResultSummaryParts(job.response);
+      const pdfUaResult = getUploadJobProfileResult(job.response, "pdfua1");
+      const wcagResult = getUploadJobProfileResult(job.response, "wcag22");
+      return {
+        pdfUaText: pdfUaResult.text,
+        pdfUaState: pdfUaResult.state,
+        wcagText: wcagResult.text,
+        wcagState: wcagResult.state,
+        complianceText: summary.complianceScoreLabel,
+        errorText: `${summary.totalErrors} ${pluralize(summary.totalErrors, "error", "errors")}`,
+        errorState: summary.totalErrors > 0 ? "fail" : "pass",
+      };
+    }
+
+    if (job.status === "failed") {
+      return {
+        pdfUaText: "n/a",
+        pdfUaState: "failed",
+        wcagText: "n/a",
+        wcagState: "failed",
+        complianceText: "n/a",
+        errorText: "n/a",
+        errorState: "failed",
+      };
+    }
+
+    return pendingResult;
+  }
+
+  function getUploadJobProfileResult(response, profileKey) {
+    const results = response && Array.isArray(response.results)
+      ? response.results
+      : [];
+    const profileResult = results.find((candidate) => {
+      return normalizeValidationProfileKey(candidate && candidate.profile) === profileKey;
+    });
+
+    if (!profileResult || typeof profileResult !== "object") {
+      return {
+        text: "n/a",
+        state: "pending",
+      };
+    }
+
+    if (profileResult.passed === true) {
+      return {
+        text: "Pass",
+        state: "pass",
+      };
+    }
+
+    if (profileResult.passed === false) {
+      return {
+        text: "Fail",
+        state: "fail",
+      };
+    }
+
+    return {
+      text: "n/a",
+      state: "pending",
+    };
+  }
+
+  function normalizeValidationProfileKey(profile) {
+    const normalizedProfile = normalizeOptionalText(profile).toLowerCase();
+    if (!normalizedProfile) {
+      return "";
+    }
+
+    if (normalizedProfile.includes("pdfua-1") || normalizedProfile.includes("pdf/ua-1")) {
+      return "pdfua1";
+    }
+
+    if (
+      normalizedProfile.includes("wcag-2-2")
+      || normalizedProfile.includes("wcag_2_2")
+      || /wcag[^a-z0-9]*2[^a-z0-9]*2/.test(normalizedProfile)
+    ) {
+      return "wcag22";
+    }
+
+    return normalizedProfile;
+  }
+
+  function selectUploadJob(uploadJobId, options) {
+    if (!uploadBatchState || !Array.isArray(uploadBatchState.jobs)) {
+      return;
+    }
+
+    const job = uploadBatchState.jobs.find((candidate) => candidate.id === uploadJobId);
+    if (!job) {
+      return;
+    }
+
+    uploadBatchState.selectedJobId = uploadJobId;
+    renderUploadJobsPanel();
+
+    if (options && options.selectionSource) {
+      trackEvent("upload_queue_job_selected", {
+        selection_source: options.selectionSource,
+        job_status: normalizeOptionalText(job.status) || "unknown",
+        result_state: normalizeOptionalText(job.resultState) || "unknown",
+        has_response: Boolean(job.response),
+        has_error: Boolean(job.errorMessage),
+      });
+    }
+
+    if (options && options.renderDetails === false) {
+      return;
+    }
+    renderSelectedUploadJob(job, options);
+
+    if (options && options.scrollToValidationOutput) {
+      scheduleValidationOutputScrollIntoView(options.scrollSource);
+    }
+  }
+
+  function renderSelectedUploadJob(job, options) {
+    if (!job) {
+      return;
+    }
+
+    if (job.response) {
+      renderResponse(job.response, job.runDeltaContext, {
+        persistSnapshot: !job.snapshotRecorded,
+      });
+      job.snapshotRecorded = true;
+      return;
+    }
+
+    if (job.errorMessage) {
+      showError(`${job.name}: ${job.errorMessage}`);
+      return;
+    }
+
+    clearOutput();
+    if (options && options.suppressStatusUpdate) {
+      return;
+    }
+    statusText.textContent = `${job.name}: ${formatUploadJobStatusLabel(job.status)} (${Math.round(job.progress)}%).`;
+  }
+
+  function scheduleValidationOutputScrollIntoView(scrollSource) {
+    if (typeof window.requestAnimationFrame === "function") {
+      window.requestAnimationFrame(() => {
+        scrollValidationOutputIntoView(scrollSource);
+      });
+      return;
+    }
+    scrollValidationOutputIntoView(scrollSource);
+  }
+
+  function scrollValidationOutputIntoView(scrollSource) {
+    const target = getVisibleValidationOutputPanel();
+    if (!target) {
+      return;
+    }
+
+    const prefersReducedMotion = Boolean(
+      window.matchMedia
+      && window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+    );
+    target.scrollIntoView({
+      behavior: prefersReducedMotion ? "auto" : "smooth",
+      block: "start",
+    });
+    trackEvent("upload_queue_result_scrolled", {
+      scroll_source: normalizeOptionalText(scrollSource) || "queue_selection",
+      panel_type: target === errorPanel ? "error" : "result",
+      smooth_scroll: !prefersReducedMotion,
+    });
+  }
+
+  function getVisibleValidationOutputPanel() {
+    if (resultPanel && !resultPanel.classList.contains("hidden")) {
+      return resultPanel;
+    }
+
+    if (errorPanel && !errorPanel.classList.contains("hidden")) {
+      return errorPanel;
+    }
+
+    return null;
+  }
+
+  function clearUploadBatchPanelState() {
+    uploadBatchState = null;
+    renderUploadJobsPanel();
+  }
+
+  function syncUploadJobsPanelVisibility() {
+    if (!uploadJobsPanel) {
+      return;
+    }
+
+    const hasJobs = Boolean(uploadBatchState && Array.isArray(uploadBatchState.jobs) && uploadBatchState.jobs.length);
+    const shouldShow = getSelectedMode() === "upload" && hasJobs;
+    uploadJobsPanel.classList.toggle("hidden", !shouldShow);
+    uploadJobsPanel.setAttribute("aria-hidden", String(!shouldShow));
+  }
+
+  function renderUploadJobsPanel() {
+    if (!uploadJobsPanel || !uploadJobsBody || !uploadSummaryText) {
+      return;
+    }
+
+    if (!uploadBatchState || !Array.isArray(uploadBatchState.jobs) || !uploadBatchState.jobs.length) {
+      uploadJobsBody.innerHTML = "";
+      uploadSummaryText.textContent = "";
+      syncUploadJobsPanelVisibility();
+      return;
+    }
+
+    const selectedJobId = normalizeOptionalText(uploadBatchState.selectedJobId);
+    const rowsHtml = uploadBatchState.jobs
+      .map((job) => {
+        const progressValue = Math.round(job.progress);
+        const isSelected = selectedJobId !== "" && selectedJobId === job.id;
+        const rowClassNames = [
+          "upload-job-row",
+          isSelected ? "is-selected" : "",
+        ]
+          .filter(Boolean)
+          .join(" ");
+        const resultColumns = getUploadJobResultColumns(job);
+        const pdfUaClassName = `upload-summary-${resultColumns.pdfUaState}`;
+        const wcagClassName = `upload-summary-${resultColumns.wcagState}`;
+        const errorsClassName = `upload-summary-${resultColumns.errorState}`;
+        const statusClassName = `upload-status-${job.status}`;
+        const viewDetailsToneClass = `upload-view-details-${getUploadJobViewDetailsTone(job)}`;
+        const actionHtml = isUploadJobRemovable(job)
+          ? `
+              <button
+                type="button"
+                class="upload-remove-btn"
+                data-upload-job-id="${escapeHtml(job.id)}"
+                aria-label="Remove ${escapeHtml(job.name)} from queue"
+              >
+                Remove
+              </button>
+            `
+          : isUploadJobViewDetailsAvailable(job)
+            ? `
+                <button
+                  type="button"
+                  class="upload-view-details-btn ${viewDetailsToneClass}"
+                  data-upload-job-id="${escapeHtml(job.id)}"
+                  aria-label="View details for ${escapeHtml(job.name)}"
+                >
+                  View Details
+                </button>
+              `
+          : '<span class="upload-action-placeholder">-</span>';
+
+        return `
+          <tr
+            class="${rowClassNames}"
+            data-upload-job-id="${escapeHtml(job.id)}"
+            tabindex="0"
+            title="View ${escapeHtml(job.name)} details"
+          >
+            <td class="upload-job-name-cell" data-label="File">
+              ${escapeHtml(job.name)} <span class="upload-job-file-size">(${escapeHtml(formatFileSize(job.size))})</span>
+            </td>
+            <td data-label="Status / Progress">
+              <div class="upload-status-progress-cell">
+                <div class="upload-status-inline">
+                  <span class="upload-progress-value">${progressValue}%</span>
+                  <span class="upload-status-pill ${statusClassName}">
+                    ${escapeHtml(formatUploadJobStatusLabel(job.status))}
+                  </span>
+                </div>
+                <div class="upload-progress-cell">
+                  <div class="upload-progress-track" aria-hidden="true">
+                    <span style="width: ${progressValue}%"></span>
+                  </div>
+                </div>
+              </div>
+            </td>
+            <td data-label="PDF/UA-1">
+              <span class="upload-job-summary ${pdfUaClassName}">
+                ${escapeHtml(resultColumns.pdfUaText)}
+              </span>
+            </td>
+            <td data-label="WCAG Result">
+              <span class="upload-job-summary ${wcagClassName}">
+                ${escapeHtml(resultColumns.wcagText)}
+              </span>
+            </td>
+            <td data-label="Compliance Score">
+              <span class="upload-job-summary">
+                ${escapeHtml(resultColumns.complianceText)}
+              </span>
+            </td>
+            <td data-label="Errors">
+              <span class="upload-job-summary ${errorsClassName}">
+                ${escapeHtml(resultColumns.errorText)}
+              </span>
+            </td>
+            <td class="upload-job-action-cell" data-label="Action">${actionHtml}</td>
+          </tr>
+        `;
+      })
+      .join("");
+
+    uploadJobsBody.innerHTML = rowsHtml;
+    uploadSummaryText.textContent = formatUploadBatchSummaryText(summarizeUploadJobs(uploadBatchState.jobs));
+    syncUploadJobsPanelVisibility();
+  }
+
+  function summarizeUploadJobs(jobs) {
+    const summary = {
+      totalCount: Array.isArray(jobs) ? jobs.length : 0,
+      processedCount: 0,
+      queuedCount: 0,
+      activeCount: 0,
+      completedCount: 0,
+      failedCount: 0,
+      passCount: 0,
+      mixedCount: 0,
+      failCount: 0,
+    };
+
+    if (!Array.isArray(jobs)) {
+      return summary;
+    }
+
+    jobs.forEach((job) => {
+      if (job.status === "completed" && job.response) {
+        summary.completedCount += 1;
+        summary.processedCount += 1;
+        const overallState = getOverallResultState(job.response);
+        if (overallState === "pass") {
+          summary.passCount += 1;
+        } else if (overallState === "mixed") {
+          summary.mixedCount += 1;
+        } else {
+          summary.failCount += 1;
+        }
+        return;
+      }
+
+      if (job.status === "failed") {
+        summary.failedCount += 1;
+        summary.processedCount += 1;
+        return;
+      }
+
+      if (job.status === "queued") {
+        summary.queuedCount += 1;
+        return;
+      }
+
+      summary.activeCount += 1;
+    });
+
+    return summary;
+  }
+
+  function formatUploadBatchSummaryText(summary) {
+    const processedText = `${summary.processedCount}/${summary.totalCount} processed`;
+    const stateText = `Pass ${summary.passCount} | Mixed ${summary.mixedCount} | Fail ${summary.failCount}`;
+    const errorText = `Request errors ${summary.failedCount}`;
+
+    if (summary.queuedCount > 0 && summary.activeCount === 0 && summary.processedCount === 0) {
+      return `Queued: ${summary.queuedCount}/${summary.totalCount} ready to run.`;
+    }
+
+    if (summary.activeCount > 0) {
+      return `Running: ${processedText} | ${stateText} | ${errorText}`;
+    }
+
+    return `Completed: ${processedText} | ${stateText} | ${errorText}`;
+  }
+
+  function formatUploadBatchStatusText(summary) {
+    if (summary.totalCount <= 0) {
+      return "";
+    }
+
+    if (summary.failedCount === summary.totalCount) {
+      return `All ${summary.totalCount} ${pluralize(summary.totalCount, "upload", "uploads")} failed.`;
+    }
+
+    if (summary.failedCount > 0) {
+      return `Processed ${summary.totalCount} ${pluralize(summary.totalCount, "file", "files")} with ${summary.failedCount} request ${pluralize(summary.failedCount, "error", "errors")}.`;
+    }
+
+    return `Validation complete for ${summary.totalCount} ${pluralize(summary.totalCount, "file", "files")}.`;
+  }
+
+  function formatUploadJobStatusLabel(status) {
+    switch (status) {
+      case "queued":
+        return "Queued";
+      case "reading":
+        return "Reading";
+      case "uploading":
+        return "Uploading";
+      case "processing":
+        return "Processing";
+      case "completed":
+        return "Complete";
+      case "failed":
+        return "Failed";
+      default:
+        return "Pending";
+    }
+  }
+
+  function getUploadJobResultSummaryParts(response) {
+    const results = response && Array.isArray(response.results)
+      ? response.results
+      : [];
+    const overallState = getOverallResultState(response || {});
+    const overallLabel = overallState.charAt(0).toUpperCase() + overallState.slice(1);
+    const complianceScore = computeResponseComplianceScore(response);
+    const complianceScoreLabel = formatComplianceScore(complianceScore);
+    const totalErrors = results.reduce((sum, profileResult) => {
+      const candidate = Number(profileResult && profileResult.summary && profileResult.summary.errors);
+      if (!Number.isFinite(candidate) || candidate < 0) {
+        return sum;
+      }
+      return sum + candidate;
+    }, 0);
+
+    return {
+      overallState,
+      overallLabel,
+      complianceScoreLabel,
+      totalErrors,
+    };
+  }
+
+  function formatUploadJobResultSummary(response) {
+    const summary = getUploadJobResultSummaryParts(response);
+    return `${summary.overallLabel} | ${summary.complianceScoreLabel} | ${summary.totalErrors} ${pluralize(summary.totalErrors, "error", "errors")}`;
+  }
+
+  function computeResponseComplianceScore(response) {
+    const results = response && Array.isArray(response.results)
+      ? response.results
+      : [];
+    if (!results.length) {
+      return null;
+    }
+
+    let totalCheckedRules = 0;
+    let totalEffectiveFailedRules = 0;
+    const fallbackScores = [];
+
+    results.forEach((profileResult) => {
+      const summary = profileResult && profileResult.summary && typeof profileResult.summary === "object"
+        ? profileResult.summary
+        : {};
+      const scoreInputs = getComplianceScoreInputs(summary);
+      const checkedRules = scoreInputs.checkedRules;
+
+      if (checkedRules != null && checkedRules > 0) {
+        totalCheckedRules += checkedRules;
+        totalEffectiveFailedRules += Math.min(scoreInputs.effectiveFailedRules, checkedRules);
+        return;
+      }
+
+      const complianceScore = computeProfileComplianceScore(summary);
+      if (Number.isFinite(complianceScore)) {
+        fallbackScores.push(complianceScore);
+      }
+    });
+
+    if (totalCheckedRules > 0) {
+      const boundedEffectiveFailedRules = Math.min(totalEffectiveFailedRules, totalCheckedRules);
+      const passedRules = Math.max(0, totalCheckedRules - boundedEffectiveFailedRules);
+      const weightedScore = (passedRules / totalCheckedRules) * 100;
+      return Math.max(0, Math.min(100, weightedScore));
+    }
+
+    if (!fallbackScores.length) {
+      return null;
+    }
+
+    const averageScore = fallbackScores.reduce((sum, score) => sum + score, 0) / fallbackScores.length;
+    return Math.max(0, Math.min(100, averageScore));
+  }
+
+  function setUploadJobState(job, status, progress, summaryText) {
+    if (!job) {
+      return;
+    }
+
+    const normalizedProgress = Number.isFinite(progress) ? clampUploadProgressValue(progress) : job.progress;
+    const roundedProgress = Math.round(normalizedProgress);
+    const previousRoundedProgress = Math.round(job.progress);
+    const nextStatus = normalizeOptionalText(status) || job.status;
+    const hasStatusChanged = nextStatus !== job.status;
+    const hasProgressChanged = roundedProgress !== previousRoundedProgress;
+    const hasSummaryChanged = summaryText != null && summaryText !== job.summaryText;
+
+    job.status = nextStatus;
+    job.progress = normalizedProgress;
+    if (summaryText != null) {
+      job.summaryText = String(summaryText);
+    }
+
+    if (!hasStatusChanged && !hasProgressChanged && !hasSummaryChanged) {
+      return;
+    }
+
+    renderUploadJobsPanel();
+  }
+
+  function getSelectedUploadFiles() {
+    if (Array.isArray(pendingUploadFiles) && pendingUploadFiles.length) {
+      return [...pendingUploadFiles];
+    }
+
+    if (!fileInput.files) {
+      return [];
+    }
+
+    return Array.from(fileInput.files);
+  }
+
+  function normalizeUploadFileSelection(filesLike, options) {
+    const selectedFiles = Array.from(filesLike || []);
+    const existingFiles = options && Array.isArray(options.existingFiles)
+      ? options.existingFiles
+      : [];
+    const availableSlots = options && Number.isFinite(options.availableSlots)
+      ? Math.max(0, Math.floor(options.availableSlots))
+      : MAX_UPLOAD_FILES;
+    const validFiles = [];
+    let invalidTypeCount = 0;
+    let oversizedCount = 0;
+    let duplicateCount = 0;
+    const existingSignatures = new Set(
+      existingFiles.map((file) => buildUploadFileSignature(file)),
+    );
+    const selectedSignatures = new Set();
+
+    selectedFiles.forEach((file) => {
+      if (!isPdfFile(file)) {
+        invalidTypeCount += 1;
+        return;
+      }
+      if (file.size > MAX_UPLOAD_BYTES) {
+        oversizedCount += 1;
+        return;
+      }
+
+      const signature = buildUploadFileSignature(file);
+      if (existingSignatures.has(signature) || selectedSignatures.has(signature)) {
+        duplicateCount += 1;
+        return;
+      }
+
+      selectedSignatures.add(signature);
+      validFiles.push(file);
+    });
+
+    const droppedDueToLimit = Math.max(0, validFiles.length - availableSlots);
+    const limitedFiles = validFiles.slice(0, availableSlots);
+    const messages = [];
+
+    if (invalidTypeCount > 0) {
+      messages.push(`Ignored ${invalidTypeCount} non-PDF ${pluralize(invalidTypeCount, "file", "files")}.`);
+    }
+    if (oversizedCount > 0) {
+      messages.push(`Ignored ${oversizedCount} oversized ${pluralize(oversizedCount, "file", "files")} (>${MAX_UPLOAD_MB} MB).`);
+    }
+    if (duplicateCount > 0) {
+      messages.push(`Ignored ${duplicateCount} duplicate ${pluralize(duplicateCount, "file", "files")}.`);
+    }
+    if (droppedDueToLimit > 0) {
+      if (availableSlots === 0) {
+        messages.push(`Queue already has ${MAX_UPLOAD_FILES} files. Remove one to add another.`);
+      } else {
+        messages.push(`Added ${availableSlots} and skipped ${droppedDueToLimit} because max queue size is ${MAX_UPLOAD_FILES}.`);
+      }
+    }
+
+    return {
+      files: limitedFiles,
+      messages,
+      selectedCount: selectedFiles.length,
+      invalidTypeCount: invalidTypeCount,
+      oversizedCount: oversizedCount,
+      duplicateCount: duplicateCount,
+      droppedDueToLimit: droppedDueToLimit,
+    };
+  }
+
+  function buildUploadFileSignature(file) {
+    const name = file && file.name != null ? String(file.name) : "";
+    const size = file && Number.isFinite(file.size) ? String(file.size) : "0";
+    const modified = file && Number.isFinite(file.lastModified) ? String(file.lastModified) : "0";
+    return `${name}::${size}::${modified}`;
+  }
+
+  function validateUploadFile(file) {
+    if (!file) {
+      throw new Error("Select at least one PDF file to upload.");
+    }
+    if (!isPdfFile(file)) {
+      throw new Error("Only PDF files are accepted.");
+    }
+    if (file.size > MAX_UPLOAD_BYTES) {
+      throw new Error(`PDF upload exceeds ${MAX_UPLOAD_MB} MB limit.`);
+    }
+  }
+
+  function updateUploadDropHint() {
     if (!uploadDropHint) {
       return;
     }
 
-    const file = getSelectedUploadFile();
-    if (!file) {
-      uploadDropHint.textContent = defaultHint;
+    const files = getSelectedUploadFiles();
+    if (!files.length) {
+      uploadDropHint.textContent = uploadDropHintDefaultText;
       return;
     }
 
-    uploadDropHint.textContent = `Selected: ${file.name} (${formatFileSize(file.size)}). Maximum upload size: ${MAX_UPLOAD_MB} MB.`;
+    if (files.length === 1) {
+      const file = files[0];
+      uploadDropHint.textContent = `Selected: ${file.name} (${formatFileSize(file.size)}). Max ${MAX_UPLOAD_FILES} files, ${MAX_UPLOAD_MB} MB each.`;
+      return;
+    }
+
+    const totalBytes = files.reduce((sum, file) => sum + (Number(file.size) || 0), 0);
+    uploadDropHint.textContent = `Selected ${files.length} files (${formatFileSize(totalBytes)} total). Max ${MAX_UPLOAD_FILES} files, ${MAX_UPLOAD_MB} MB each.`;
   }
 
   function isPdfFile(file) {
@@ -783,6 +1789,29 @@
       return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
     }
     return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  }
+
+  function clampUploadProgressValue(value) {
+    if (!Number.isFinite(value)) {
+      return 0;
+    }
+    return Math.min(100, Math.max(0, value));
+  }
+
+  function clampUploadRatio(value) {
+    if (!Number.isFinite(value)) {
+      return 0;
+    }
+    return Math.min(1, Math.max(0, value));
+  }
+
+  function interpolateProgress(ratio, min, max) {
+    const boundedRatio = clampUploadRatio(ratio);
+    return min + ((max - min) * boundedRatio);
+  }
+
+  function pluralize(count, singular, plural) {
+    return count === 1 ? singular : plural;
   }
 
   async function requestJson(url, options) {
@@ -809,8 +1838,68 @@
     return payload;
   }
 
-  function renderResponse(data, runDeltaContext) {
+  function requestJsonWithUploadProgress(url, options, onUploadProgress) {
+    return new Promise((resolve, reject) => {
+      const method = options && options.method ? String(options.method).toUpperCase() : "GET";
+      const headers = options && options.headers && typeof options.headers === "object"
+        ? options.headers
+        : {};
+      const body = options && Object.prototype.hasOwnProperty.call(options, "body")
+        ? options.body
+        : null;
+      const xhr = new XMLHttpRequest();
+
+      xhr.open(method, url, true);
+      Object.entries(headers).forEach(([headerName, headerValue]) => {
+        if (headerValue == null) {
+          return;
+        }
+        xhr.setRequestHeader(headerName, String(headerValue));
+      });
+
+      xhr.onerror = () => {
+        reject(new Error("Network error while contacting Lambda endpoint."));
+      };
+
+      xhr.onabort = () => {
+        reject(new Error("Request was canceled before completion."));
+      };
+
+      xhr.onload = () => {
+        let payload;
+        try {
+          payload = JSON.parse(xhr.responseText);
+        } catch (_error) {
+          reject(new Error(`Lambda returned non-JSON response (HTTP ${xhr.status}).`));
+          return;
+        }
+
+        if (xhr.status < 200 || xhr.status >= 300) {
+          const requestId = payload && payload.request_id ? `request_id=${payload.request_id}` : "";
+          const reason = payload && payload.error ? payload.error : "Request failed";
+          reject(new Error(`${reason}${requestId ? ` (${requestId})` : ""}`));
+          return;
+        }
+
+        resolve(payload);
+      };
+
+      if (typeof onUploadProgress === "function" && xhr.upload) {
+        xhr.upload.onprogress = (event) => {
+          if (!event.lengthComputable || event.total <= 0) {
+            return;
+          }
+          onUploadProgress(event.loaded / event.total);
+        };
+      }
+
+      xhr.send(body);
+    });
+  }
+
+  function renderResponse(data, runDeltaContext, options) {
     errorPanel.classList.add("hidden");
+    const responseRequestId = normalizeOptionalText(data && data.request_id);
 
     const overallState = getOverallResultState(data);
     const overallBadgeClass = overallState;
@@ -826,9 +1915,12 @@
     const runDeltaKey = runDeltaContext && runDeltaContext.key
       ? runDeltaContext.key
       : RUN_DELTA_DEFAULT_KEY;
+    const shouldPersistSnapshot = !(options && options.persistSnapshot === false);
     const currentRunSnapshot = buildRunSnapshot(data, normalizedResults, runDeltaContext);
     const existingRunHistory = getRunHistoryByDocumentKey(runSnapshotStore, runDeltaKey);
-    const nextRunHistory = appendRunSnapshotToHistory(existingRunHistory, currentRunSnapshot);
+    const nextRunHistory = shouldPersistSnapshot
+      ? appendRunSnapshotToHistory(existingRunHistory, currentRunSnapshot)
+      : (existingRunHistory.length ? existingRunHistory : [currentRunSnapshot]);
 
     activeRunDeltaKey = runDeltaKey;
     activeRunDeltaComparisonIndex = nextRunHistory.length >= 2 ? nextRunHistory.length - 1 : 0;
@@ -881,11 +1973,13 @@
     `;
 
     resultPanel.innerHTML = headerHtml;
+    resultPanel.dataset.requestId = responseRequestId;
     resultPanel.classList.remove("result-pass", "result-fail", "result-mixed");
     resultPanel.classList.add(resultStateClass);
     resultPanel.classList.remove("hidden");
     animateResultPanel();
     startExplainButtonAttentionPulseLoop();
+    restoreExplainedIssuesStateForRequest(responseRequestId);
 
     const profileGrid = document.getElementById("profile-grid");
     normalizedResults.forEach(({ profileResult, issues }) => {
@@ -918,8 +2012,10 @@
       profileGrid.appendChild(fragment);
     });
 
-    runSnapshotStore[runDeltaKey] = nextRunHistory;
-    saveRunSnapshotStoreToStorage(runSnapshotStore);
+    if (shouldPersistSnapshot) {
+      runSnapshotStore[runDeltaKey] = nextRunHistory;
+      saveRunSnapshotStoreToStorage(runSnapshotStore);
+    }
   }
 
   function buildFailedProfilesForIssueExplanation(normalizedResults) {
@@ -1024,14 +2120,18 @@
           failed_profiles: failedProfilesForIssueExplanation,
         }),
       });
-      renderIssueExplanationSummary(explanationPanel, response && response.summary);
-      setExplainButtonCompletedState(button);
-      hasCompleted = true;
+      const explanationSummary = normalizeOptionalText(response && response.summary);
+      renderIssueExplanationSummary(explanationPanel, explanationSummary);
+      if (explanationSummary) {
+        rememberExplainedIssuesSummary(explanationSummary);
+        setExplainButtonCompletedState(button);
+        hasCompleted = true;
+      }
       trackEvent("explain_issues_succeeded", {
         profile_count: failedProfilesForIssueExplanation.length,
         explain_token_present: hasExplainIssuesToken,
-        summary_length: normalizeOptionalText(response && response.summary)
-          ? normalizeOptionalText(response && response.summary).length
+        summary_length: explanationSummary
+          ? explanationSummary.length
           : 0,
       });
     } catch (error) {
@@ -1083,6 +2183,55 @@
       return;
     }
     button.textContent = "Explained";
+  }
+
+  function getActiveResultRequestId() {
+    return normalizeOptionalText(resultPanel && resultPanel.dataset && resultPanel.dataset.requestId);
+  }
+
+  function rememberExplainedIssuesSummary(summary) {
+    const requestId = getActiveResultRequestId();
+    const normalizedSummary = normalizeOptionalText(summary);
+    if (!requestId || !normalizedSummary) {
+      return;
+    }
+
+    if (explainedIssuesSummaryByRequestId.has(requestId)) {
+      explainedIssuesSummaryByRequestId.delete(requestId);
+    }
+    explainedIssuesSummaryByRequestId.set(requestId, normalizedSummary);
+
+    while (explainedIssuesSummaryByRequestId.size > EXPLAIN_ISSUES_STATE_MAX_HISTORY) {
+      const oldestEntry = explainedIssuesSummaryByRequestId.keys().next();
+      if (oldestEntry.done) {
+        break;
+      }
+      explainedIssuesSummaryByRequestId.delete(oldestEntry.value);
+    }
+  }
+
+  function restoreExplainedIssuesStateForRequest(requestId) {
+    const normalizedRequestId = normalizeOptionalText(requestId);
+    if (!normalizedRequestId) {
+      return;
+    }
+
+    const savedSummary = explainedIssuesSummaryByRequestId.get(normalizedRequestId);
+    if (!savedSummary) {
+      return;
+    }
+
+    const explanationPanel = document.getElementById("issues-explainer-panel");
+    const explainButton = getExplainIssuesButton();
+    if (!explanationPanel || !explainButton) {
+      return;
+    }
+
+    renderIssueExplanationSummary(explanationPanel, savedSummary);
+    setExplainButtonCompletedState(explainButton);
+    trackEvent("explain_issues_state_restored", {
+      summary_length: savedSummary.length,
+    });
   }
 
   function renderIssueExplanationStatus(explanationPanel, message) {
@@ -3588,8 +4737,34 @@
     return categories;
   }
 
-  function setSubmitting(isSubmitting, message) {
+  function setSubmitting(isSubmitting, message, submittingMode) {
+    const previousSubmissionMode = activeSubmissionMode;
+    if (isSubmitting) {
+      activeSubmissionMode = submittingMode === "upload" ? "upload" : "url";
+      trackEvent("validation_input_locked", {
+        input_mode: activeSubmissionMode,
+        upload_input_locked: activeSubmissionMode !== "upload",
+        url_input_locked: activeSubmissionMode !== "url",
+      });
+    } else {
+      activeSubmissionMode = "";
+      if (previousSubmissionMode) {
+        trackEvent("validation_input_unlocked", {
+          input_mode: previousSubmissionMode,
+        });
+      }
+    }
+
     submitButton.disabled = isSubmitting;
+    setUploadSelectionDisabled(isSubmitting);
+    pdfUrlInput.disabled = Boolean(isSubmitting && activeSubmissionMode === "upload");
+    modeTabs.forEach((tab) => {
+      const tabMode = tab.dataset.mode || "upload";
+      const shouldDisable = Boolean(isSubmitting && tabMode !== activeSubmissionMode);
+      tab.disabled = shouldDisable;
+      tab.setAttribute("aria-disabled", String(shouldDisable));
+    });
+
     if (formPanel) {
       formPanel.classList.toggle("is-loading", isSubmitting);
     }
@@ -3704,6 +4879,7 @@
     stopExplainButtonAttentionPulseLoop();
     explainIssuesToken = null;
     failedProfilesForIssueExplanation = [];
+    resultPanel.dataset.requestId = "";
     resultPanel.classList.add("hidden");
     resultPanel.classList.remove("result-pass", "result-fail", "result-mixed");
     errorPanel.classList.add("hidden");
@@ -3714,6 +4890,7 @@
     stopExplainButtonAttentionPulseLoop();
     explainIssuesToken = null;
     failedProfilesForIssueExplanation = [];
+    resultPanel.dataset.requestId = "";
     resultPanel.classList.add("hidden");
     resultPanel.classList.remove("result-pass", "result-fail", "result-mixed");
     errorPanel.textContent = message;
@@ -4060,13 +5237,22 @@
       .replace(/'/g, "&#039;");
   }
 
-  function fileToBase64(file) {
+  function fileToBase64(file, onProgress) {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
 
       reader.onerror = () => {
         reject(new Error("Could not read selected PDF file."));
       };
+
+      if (typeof onProgress === "function") {
+        reader.onprogress = (event) => {
+          if (!event.lengthComputable || event.total <= 0) {
+            return;
+          }
+          onProgress(event.loaded / event.total);
+        };
+      }
 
       reader.onload = () => {
         const dataUrl = reader.result;

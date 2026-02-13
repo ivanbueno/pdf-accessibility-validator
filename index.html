@@ -109,15 +109,15 @@
               aria-selected="false"
               aria-controls="upload-mode"
             >
-              Upload PDF
+              Upload Multiple PDFs
             </button>
           </div>
           <input id="input-mode" name="input_mode" type="hidden" value="url" />
 
           <div id="upload-mode" class="mode-panel hidden" role="tabpanel" aria-labelledby="tab-upload" aria-hidden="true">
             <label id="upload-dropzone" class="field file-dropzone" tabindex="0">
-              <input id="pdf-file" name="pdf_file" type="file" accept="application/pdf,.pdf" aria-label="PDF File" aria-describedby="upload-drop-hint" />
-              <small id="upload-drop-hint" aria-live="polite">Drag and drop a PDF here, or click to choose a file. Maximum upload size: 10 MB.</small>
+              <input id="pdf-file" name="pdf_file" type="file" accept="application/pdf,.pdf" multiple aria-label="PDF File" aria-describedby="upload-drop-hint" />
+              <small id="upload-drop-hint" aria-live="polite">Drag and drop up to 5 PDFs here, or click to choose files. Maximum upload size: 10 MB per file.</small>
             </label>
           </div>
 
@@ -131,6 +131,29 @@
             <button id="submit-button" type="submit">Run Validation</button>
             <span id="status-text" aria-live="polite"></span>
           </div>
+
+          <section id="upload-jobs-panel" class="upload-jobs-panel hidden" aria-live="polite">
+            <header class="upload-jobs-header">
+              <h3>Validation Queue</h3>
+              <p id="upload-summary-text"></p>
+            </header>
+            <div class="upload-jobs-table-wrap">
+              <table class="upload-jobs-table">
+                <thead>
+                  <tr>
+                    <th>File</th>
+                    <th>Status / Progress</th>
+                    <th>PDF/UA-1</th>
+                    <th>WCAG Result</th>
+                    <th>Compliance Score</th>
+                    <th>Errors</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="upload-jobs-body"></tbody>
+              </table>
+            </div>
+          </section>
         </form>
       </section>
 
