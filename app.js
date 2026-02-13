@@ -1902,10 +1902,11 @@
   function renderResponse(data, runDeltaContext, options) {
     errorPanel.classList.add("hidden");
     const responseRequestId = normalizeOptionalText(data && data.request_id);
+    const sourceFilename = getResultSourceFilename(runDeltaContext);
 
     const overallState = getOverallResultState(data);
     const overallBadgeClass = overallState;
-    const overallBadgeText = `Overall: ${overallState.charAt(0).toUpperCase()}${overallState.slice(1)}`;
+    const overallBadgeText = `${overallState.charAt(0).toUpperCase()}${overallState.slice(1)}`;
     const resultStateClass = `result-${overallState}`;
     const sortedResults = [...(data.results || [])].sort(compareProfileResultsByPreferredOrder);
     const normalizedResults = sortedResults.map((profileResult) => {
@@ -1943,9 +1944,12 @@
 
     const headerHtml = `
       <div class="result-header">
-        <div>
-          <h2>Validation Results</h2>
-          <span class="badge overall-badge ${overallBadgeClass}">${overallBadgeText}</span>
+        <div class="result-header-main">
+          ${sourceFilename ? `<p class="result-source-filename" title="${escapeHtml(sourceFilename)}">${escapeHtml(sourceFilename)}</p>` : ""}
+          <div class="result-header-title-row">
+            <h2>Validation Results</h2>
+            <span class="badge overall-badge ${overallBadgeClass}">${overallBadgeText}</span>
+          </div>
         </div>
         ${isExplainActionVisible ? `
           <div class="result-header-actions">
@@ -2018,6 +2022,24 @@
       runSnapshotStore[runDeltaKey] = nextRunHistory;
       saveRunSnapshotStoreToStorage(runSnapshotStore);
     }
+  }
+
+  function getResultSourceFilename(runDeltaContext) {
+    const label = normalizeOptionalText(runDeltaContext && runDeltaContext.label);
+    if (!label) {
+      return "";
+    }
+
+    const normalizedLabel = label.toLowerCase();
+    if (
+      normalizedLabel === RUN_DELTA_DEFAULT_KEY
+      || normalizedLabel === "upload"
+      || normalizedLabel === "url"
+    ) {
+      return "";
+    }
+
+    return label;
   }
 
   function buildFailedProfilesForIssueExplanation(normalizedResults) {
