@@ -407,6 +407,12 @@
   let failedProfilesForIssueExplanation = [];
   let explainIssuesToken = null;
   const explainedIssuesSummaryByRequestId = new Map();
+  const resultPanelBaseClassName = resultPanel ? resultPanel.className : "panel hidden";
+  const errorPanelBaseClassName = errorPanel ? errorPanel.className : "panel error-panel hidden";
+  const validationOutputStateByMode = {
+    url: createEmptyValidationOutputState(),
+    upload: createEmptyValidationOutputState(),
+  };
 
   initAnalytics(APP_CONFIG.gaMeasurementId);
   setupUploadDropzone();
@@ -552,6 +558,9 @@
     }
 
     const previousMode = getSelectedMode();
+    if (previousMode !== normalizedMode) {
+      storeValidationOutputStateForMode(previousMode);
+    }
     inputModeField.value = normalizedMode;
 
     modeTabs.forEach((tab) => {
@@ -562,6 +571,9 @@
     });
 
     syncModePanels();
+    if (previousMode !== normalizedMode) {
+      restoreValidationOutputStateForMode(normalizedMode);
+    }
 
     if (
       options
@@ -633,6 +645,94 @@
 
   function getSelectedMode() {
     return inputModeField.value || "upload";
+  }
+
+  function createEmptyValidationOutputState() {
+    return {
+      resultHtml: "",
+      resultClassName: resultPanelBaseClassName,
+      requestId: "",
+      errorText: "",
+      errorClassName: errorPanelBaseClassName,
+      runDeltaKey: RUN_DELTA_DEFAULT_KEY,
+      runDeltaComparisonIndex: 0,
+      explainIssuesToken: null,
+      failedProfilesForIssueExplanation: [],
+    };
+  }
+
+  function cloneFailedProfilesForValidationOutputState(profiles) {
+    if (!Array.isArray(profiles)) {
+      return [];
+    }
+
+    return profiles
+      .map((profile) => {
+        if (!profile || typeof profile !== "object") {
+          return null;
+        }
+
+        return {
+          profile: normalizeOptionalText(profile.profile) || "unknown-profile",
+          raw: normalizeRawOutputForIssueExplanation(profile.raw),
+        };
+      })
+      .filter(Boolean);
+  }
+
+  function getValidationOutputStateForMode(mode) {
+    const normalizedMode = mode === "upload" ? "upload" : "url";
+    if (!validationOutputStateByMode[normalizedMode]) {
+      validationOutputStateByMode[normalizedMode] = createEmptyValidationOutputState();
+    }
+    return validationOutputStateByMode[normalizedMode];
+  }
+
+  function storeValidationOutputStateForMode(mode) {
+    if (!resultPanel || !errorPanel) {
+      return;
+    }
+
+    const state = getValidationOutputStateForMode(mode);
+    state.resultHtml = resultPanel.innerHTML;
+    state.resultClassName = resultPanel.className || resultPanelBaseClassName;
+    state.requestId = normalizeOptionalText(resultPanel.dataset.requestId);
+    state.errorText = errorPanel.textContent || "";
+    state.errorClassName = errorPanel.className || errorPanelBaseClassName;
+    state.runDeltaKey = normalizeOptionalText(activeRunDeltaKey) || RUN_DELTA_DEFAULT_KEY;
+    state.runDeltaComparisonIndex = Number.isFinite(activeRunDeltaComparisonIndex)
+      ? activeRunDeltaComparisonIndex
+      : 0;
+    state.explainIssuesToken = normalizeOptionalText(explainIssuesToken) || null;
+    state.failedProfilesForIssueExplanation = cloneFailedProfilesForValidationOutputState(
+      failedProfilesForIssueExplanation,
+    );
+  }
+
+  function restoreValidationOutputStateForMode(mode) {
+    if (!resultPanel || !errorPanel) {
+      return;
+    }
+
+    const state = getValidationOutputStateForMode(mode);
+    stopExplainButtonAttentionPulseLoop();
+
+    resultPanel.innerHTML = state.resultHtml || "";
+    resultPanel.className = state.resultClassName || resultPanelBaseClassName;
+    resultPanel.dataset.requestId = normalizeOptionalText(state.requestId);
+
+    errorPanel.textContent = state.errorText || "";
+    errorPanel.className = state.errorClassName || errorPanelBaseClassName;
+
+    activeRunDeltaKey = normalizeOptionalText(state.runDeltaKey) || RUN_DELTA_DEFAULT_KEY;
+    activeRunDeltaComparisonIndex = Number.isFinite(state.runDeltaComparisonIndex)
+      ? state.runDeltaComparisonIndex
+      : 0;
+    explainIssuesToken = normalizeOptionalText(state.explainIssuesToken) || null;
+    failedProfilesForIssueExplanation = cloneFailedProfilesForValidationOutputState(
+      state.failedProfilesForIssueExplanation,
+    );
+    startExplainButtonAttentionPulseLoop();
   }
 
   function buildRunDeltaContext(mode, sourceLabel) {
