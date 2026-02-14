@@ -7,9 +7,16 @@
     // Leave empty to disable analytics tracking.
     gaMeasurementId: "G-N43MCS8JPD",
   };
-  const MAX_UPLOAD_MB = 10;
+  const MAX_UPLOAD_MB = 20;
   const MAX_UPLOAD_FILES = 5;
   const MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024;
+  const LAMBDA_FUNCTION_URL_MAX_REQUEST_BYTES = 6 * 1024 * 1024;
+  const API_GATEWAY_MAX_REQUEST_BYTES = 10 * 1024 * 1024;
+  const UPLOAD_REQUEST_BODY_BUFFER_BYTES = 32 * 1024;
+  const UPLOAD_REQUEST_JSON_OVERHEAD_BYTES = JSON.stringify({
+    include_raw: true,
+    pdf_base64: "",
+  }).length;
   const GA_MEASUREMENT_ID_PATTERN = /^G-[A-Z0-9]+$/i;
   const ANALYTICS_EVENT_NAME_PATTERN = /^[a-z][a-z0-9_]{0,39}$/;
   const ANALYTICS_PARAM_NAME_PATTERN = /^[a-z][a-z0-9_]{0,39}$/;
@@ -813,7 +820,7 @@
 
   async function runUploadValidationJob(validateUrl, job) {
     try {
-      validateUploadFile(job.file);
+      validateUploadFile(job.file, validateUrl);
 
       setUploadJobState(job, "reading", 4, "Encoding PDF");
       const pdfBase64 = await fileToBase64(job.file, (readProgress) => {
@@ -825,6 +832,7 @@
         include_raw: true,
         pdf_base64: pdfBase64,
       });
+      assertUploadPayloadFitsEndpoint(payload, validateUrl, job.file);
 
       setUploadJobState(job, "uploading", 24, "Uploading");
       const response = await requestJsonWithUploadProgress(
@@ -1748,7 +1756,7 @@
     return `${name}::${size}::${modified}`;
   }
 
-  function validateUploadFile(file) {
+  function validateUploadFile(file, validateUrl) {
     if (!file) {
       throw new Error("Select at least one PDF file to upload.");
     }
@@ -1758,6 +1766,107 @@
     if (file.size > MAX_UPLOAD_BYTES) {
       throw new Error(`PDF upload exceeds ${MAX_UPLOAD_MB} MB limit.`);
     }
+
+    const uploadPayloadLimitBytes = getSafeUploadPayloadLimitBytes(validateUrl);
+    const estimatedPayloadBytes = estimateUploadPayloadBytesFromFileSize(file.size);
+    if (estimatedPayloadBytes > uploadPayloadLimitBytes) {
+      throw new Error(
+        buildUploadPayloadTooLargeMessage({
+          fileSizeBytes: file.size,
+          payloadSizeBytes: estimatedPayloadBytes,
+          payloadLimitBytes: uploadPayloadLimitBytes,
+          validateUrl,
+        }),
+      );
+    }
+  }
+
+  function assertUploadPayloadFitsEndpoint(payload, validateUrl, file) {
+    const uploadPayloadLimitBytes = getSafeUploadPayloadLimitBytes(validateUrl);
+    const payloadSizeBytes = getUtf8ByteLength(payload);
+    if (payloadSizeBytes <= uploadPayloadLimitBytes) {
+      return;
+    }
+
+    const fileSizeBytes = Number(file && file.size) || 0;
+    throw new Error(
+      buildUploadPayloadTooLargeMessage({
+        fileSizeBytes,
+        payloadSizeBytes,
+        payloadLimitBytes: uploadPayloadLimitBytes,
+        validateUrl,
+      }),
+    );
+  }
+
+  function buildUploadPayloadTooLargeMessage({
+    fileSizeBytes,
+    payloadSizeBytes,
+    payloadLimitBytes,
+    validateUrl,
+  }) {
+    const endpointLabel = isLikelyLambdaFunctionUrl(validateUrl)
+      ? "Lambda Function URL"
+      : "this API endpoint";
+    const practicalPdfLimitBytes = estimateMaxPdfBytesForPayloadLimit(payloadLimitBytes);
+    const practicalPdfLimitText = practicalPdfLimitBytes > 0
+      ? formatFileSize(practicalPdfLimitBytes)
+      : "a smaller file";
+    return (
+      `This PDF is too large for base64 upload via ${endpointLabel} `
+      + `(${formatFileSize(fileSizeBytes)} file -> ${formatFileSize(payloadSizeBytes)} request body; `
+      + `limit about ${formatFileSize(payloadLimitBytes)}). `
+      + `Use PDF URL mode or keep uploads under about ${practicalPdfLimitText}.`
+    );
+  }
+
+  function estimateUploadPayloadBytesFromFileSize(fileSizeBytes) {
+    const bytes = Number.isFinite(fileSizeBytes) && fileSizeBytes > 0
+      ? fileSizeBytes
+      : 0;
+    const base64Bytes = Math.ceil(bytes / 3) * 4;
+    return UPLOAD_REQUEST_JSON_OVERHEAD_BYTES + base64Bytes;
+  }
+
+  function estimateMaxPdfBytesForPayloadLimit(payloadLimitBytes) {
+    const limitBytes = Number.isFinite(payloadLimitBytes) && payloadLimitBytes > 0
+      ? Math.floor(payloadLimitBytes)
+      : 0;
+    const availableForBase64 = Math.max(0, limitBytes - UPLOAD_REQUEST_JSON_OVERHEAD_BYTES);
+    return Math.floor(availableForBase64 / 4) * 3;
+  }
+
+  function getSafeUploadPayloadLimitBytes(validateUrl) {
+    const endpointLimitBytes = getUploadPayloadLimitBytes(validateUrl);
+    return Math.max(0, endpointLimitBytes - UPLOAD_REQUEST_BODY_BUFFER_BYTES);
+  }
+
+  function getUploadPayloadLimitBytes(validateUrl) {
+    return isLikelyLambdaFunctionUrl(validateUrl)
+      ? LAMBDA_FUNCTION_URL_MAX_REQUEST_BYTES
+      : API_GATEWAY_MAX_REQUEST_BYTES;
+  }
+
+  function isLikelyLambdaFunctionUrl(validateUrl) {
+    try {
+      const url = new URL(String(validateUrl || ""));
+      const hostname = normalizeOptionalText(url.hostname).toLowerCase();
+      return hostname.includes(".lambda-url.") && hostname.endsWith(".on.aws");
+    } catch (_error) {
+      // Fall back to the stricter limit when URL parsing fails.
+      return true;
+    }
+  }
+
+  function getUtf8ByteLength(value) {
+    const normalizedValue = String(value || "");
+    if (typeof TextEncoder === "function") {
+      return new TextEncoder().encode(normalizedValue).length;
+    }
+    if (typeof Blob === "function") {
+      return new Blob([normalizedValue]).size;
+    }
+    return normalizedValue.length;
   }
 
   function updateUploadDropHint() {
@@ -1824,17 +1933,27 @@
       throw new Error("Network error while contacting Lambda endpoint.");
     }
 
-    let payload;
-    try {
-      payload = await response.json();
-    } catch (_error) {
-      throw new Error(`Lambda returned non-JSON response (HTTP ${response.status}).`);
+    const rawResponseText = await response.text();
+    let payload = null;
+    if (rawResponseText.trim()) {
+      try {
+        payload = JSON.parse(rawResponseText);
+      } catch (_error) {
+        if (!response.ok) {
+          throw new Error(buildNonJsonLambdaErrorMessage(response.status, rawResponseText));
+        }
+        throw new Error(`Lambda returned non-JSON response (HTTP ${response.status}).`);
+      }
     }
 
     if (!response.ok) {
       const requestId = payload && payload.request_id ? `request_id=${payload.request_id}` : "";
       const reason = payload && payload.error ? payload.error : "Request failed";
       throw new Error(`${reason}${requestId ? ` (${requestId})` : ""}`);
+    }
+
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+      throw new Error(`Lambda returned unexpected response format (HTTP ${response.status}).`);
     }
 
     return payload;
@@ -1868,11 +1987,12 @@
       };
 
       xhr.onload = () => {
+        const rawResponseText = String(xhr.responseText || "");
         let payload;
         try {
-          payload = JSON.parse(xhr.responseText);
+          payload = JSON.parse(rawResponseText);
         } catch (_error) {
-          reject(new Error(`Lambda returned non-JSON response (HTTP ${xhr.status}).`));
+          reject(new Error(buildNonJsonLambdaErrorMessage(xhr.status, rawResponseText)));
           return;
         }
 
@@ -1880,6 +2000,11 @@
           const requestId = payload && payload.request_id ? `request_id=${payload.request_id}` : "";
           const reason = payload && payload.error ? payload.error : "Request failed";
           reject(new Error(`${reason}${requestId ? ` (${requestId})` : ""}`));
+          return;
+        }
+
+        if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+          reject(new Error(`Lambda returned unexpected response format (HTTP ${xhr.status}).`));
           return;
         }
 
@@ -1897,6 +2022,20 @@
 
       xhr.send(body);
     });
+  }
+
+  function buildNonJsonLambdaErrorMessage(statusCode, responseText) {
+    const rawMessage = normalizeOptionalText(responseText).toLowerCase();
+    if (
+      statusCode === 413
+      || rawMessage.includes("request entity too large")
+      || rawMessage.includes("payload too large")
+      || rawMessage.includes("request too large")
+    ) {
+      return "Upload payload exceeded endpoint size limits. Use a smaller PDF or PDF URL mode.";
+    }
+
+    return `Lambda returned non-JSON response (HTTP ${statusCode}).`;
   }
 
   function renderResponse(data, runDeltaContext, options) {

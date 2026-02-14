@@ -117,7 +117,7 @@
           <div id="upload-mode" class="mode-panel hidden" role="tabpanel" aria-labelledby="tab-upload" aria-hidden="true">
             <label id="upload-dropzone" class="field file-dropzone" tabindex="0">
               <input id="pdf-file" name="pdf_file" type="file" accept="application/pdf,.pdf" multiple aria-label="PDF File" aria-describedby="upload-drop-hint" />
-              <small id="upload-drop-hint" aria-live="polite">Drag and drop up to 5 PDFs here, or click to choose files. Maximum upload size: 10 MB per file.</small>
+              <small id="upload-drop-hint" aria-live="polite">Drag and drop up to 5 PDFs here, or click to choose files. Processing limit is 20 MB per file, but base64 upload limits can be lower depending on the endpoint.</small>
             </label>
           </div>
 
@@ -429,7 +429,7 @@
                       thresholds.
                     </p>
                     <p>
-                      Current size limits: web upload and direct API validation are both capped at 10 MB per PDF.
+                      Current size limits: web upload and direct API validation are both capped at 20 MB per PDF.
                     </p>
                     <p>
                       Organizations with higher validation volumes, production workloads, or batch-processing requirements may
