@@ -7,7 +7,7 @@
     // Leave empty to disable analytics tracking.
     gaMeasurementId: "G-N43MCS8JPD",
   };
-  const MAX_UPLOAD_MB = 20;
+  const MAX_UPLOAD_MB = 5;
   const MAX_UPLOAD_FILES = 5;
   const MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024;
   const LAMBDA_FUNCTION_URL_MAX_REQUEST_BYTES = 6 * 1024 * 1024;
