@@ -4400,12 +4400,26 @@
       const errorCount = getIssueFailedChecks(issue);
       const isLastIssue = index === sortedIssues.length - 1;
       const stripeClass = index % 2 === 0 ? "issue-stripe-a" : "issue-stripe-b";
+      const sourceEvidence = issue && issue.rule_evidence && typeof issue.rule_evidence === "object"
+        ? issue.rule_evidence
+        : null;
+      const ruleIdMetadata = extractClauseAndTestNumberFromRuleId(issue && issue.rule_id);
+      const clause = normalizeOptionalText(
+        issue && issue.clause,
+      ) || normalizeOptionalText(
+        sourceEvidence && sourceEvidence.clause,
+      ) || ruleIdMetadata.clause || "-";
+      const testNumber = normalizeOptionalText(
+        issue && (issue.test_number || issue.testNumber),
+      ) || normalizeOptionalText(
+        sourceEvidence && (sourceEvidence.testNumber || sourceEvidence.test_number),
+      ) || ruleIdMetadata.testNumber || "-";
       return `
         <tr class="issue-main-row ${stripeClass}">
+          <td>${escapeHtml(clause)}</td>
+          <td>${escapeHtml(testNumber)}</td>
           <td>${errorCount}</td>
           <td>${escapeHtml(issue.severity || "")}</td>
-          <td>${escapeHtml(issue.rule_id || "-")}</td>
-          <td>${issue.page == null ? "-" : Number(issue.page)}</td>
         </tr>
         <tr class="issue-message-row ${stripeClass}">
           <td colspan="4">
@@ -4437,6 +4451,38 @@
   function getIssueFailedChecks(issue) {
     const failedChecks = parseNonNegativeInteger(issue && issue.failed_checks);
     return failedChecks == null ? 1 : failedChecks;
+  }
+
+  function extractClauseAndTestNumberFromRuleId(ruleId) {
+    const normalizedRuleId = normalizeOptionalText(ruleId);
+    if (!normalizedRuleId) {
+      return {
+        clause: null,
+        testNumber: null,
+      };
+    }
+
+    const parts = normalizedRuleId
+      .split(":")
+      .map((part) => part.trim())
+      .filter(Boolean);
+    if (parts.length < 2) {
+      return {
+        clause: null,
+        testNumber: null,
+      };
+    }
+    if (parts.length === 2) {
+      return {
+        clause: parts[1],
+        testNumber: null,
+      };
+    }
+
+    return {
+      clause: parts[parts.length - 2] || null,
+      testNumber: parts[parts.length - 1] || null,
+    };
   }
 
   function renderIssueFixPlan(issue) {

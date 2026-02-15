@@ -2547,6 +2547,10 @@ summary {
   padding-bottom: 0.3rem;
 }
 
+.issues-table .issue-main-row td:first-child {
+  font-weight: 700;
+}
+
 .issues-table .issue-message-row td {
   padding: 0.25rem 0.55rem 0.8rem;
   border-bottom: 0;
