@@ -10,6 +10,10 @@
   const MAX_UPLOAD_MB = 5;
   const MAX_UPLOAD_FILES = 5;
   const MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024;
+  const MAX_PDF_URL_LENGTH = 2048;
+  const PDF_URL_CONTROL_CHAR_PATTERN = /[\u0000-\u001F\u007F]/;
+  const PDF_URL_XSS_CHAR_PATTERN = /[<>"'`]/;
+  const PDF_URL_SQLI_SEQUENCE_PATTERN = /(--|\/\*|\*\/|;)/;
   const LAMBDA_FUNCTION_URL_MAX_REQUEST_BYTES = 6 * 1024 * 1024;
   const API_GATEWAY_MAX_REQUEST_BYTES = 10 * 1024 * 1024;
   const UPLOAD_REQUEST_BODY_BUFFER_BYTES = 32 * 1024;
@@ -413,6 +417,7 @@
     url: createEmptyValidationOutputState(),
     upload: createEmptyValidationOutputState(),
   };
+  const initialPdfUrlFromQuery = readPdfUrlFromQueryString();
 
   initAnalytics(APP_CONFIG.gaMeasurementId);
   setupUploadDropzone();
@@ -517,8 +522,8 @@
         return;
       }
 
-      const runDeltaContext = buildRunDeltaContext(selectedMode);
       const response = await runUrlValidation(validateUrl);
+      const runDeltaContext = buildRunDeltaContext(selectedMode);
       renderResponse(response, runDeltaContext);
       trackEvent("validate_request_succeeded", {
         input_mode: selectedMode,
@@ -539,6 +544,7 @@
   setSelectedMode(inputModeField.value || "url", {
     trackChange: false,
   });
+  applyInitialPdfUrlFromQueryAndAutoSubmit();
   renderApiInstructions();
   if (currentYear) {
     currentYear.textContent = String(new Date().getFullYear());
@@ -584,6 +590,152 @@
         input_mode: normalizedMode,
         change_source: normalizeOptionalText(options.changeSource) || "unknown",
       });
+    }
+  }
+
+  function applyInitialPdfUrlFromQueryAndAutoSubmit() {
+    if (!initialPdfUrlFromQuery) {
+      return;
+    }
+
+    const sanitizedInitialPdfUrl = sanitizePdfUrlInput(initialPdfUrlFromQuery);
+    if (!sanitizedInitialPdfUrl.value) {
+      showError(`Invalid pdf_url query parameter: ${sanitizedInitialPdfUrl.error}`);
+      statusText.textContent = "Blocked unsafe PDF URL from querystring.";
+      return;
+    }
+
+    pdfUrlInput.value = sanitizedInitialPdfUrl.value;
+    setSelectedMode("url", {
+      trackChange: false,
+    });
+
+    window.requestAnimationFrame(() => {
+      if (activeSubmissionMode) {
+        return;
+      }
+
+      if (typeof form.requestSubmit === "function") {
+        if (submitButton && !submitButton.disabled) {
+          form.requestSubmit(submitButton);
+          return;
+        }
+        form.requestSubmit();
+        return;
+      }
+
+      form.dispatchEvent(new Event("submit", {
+        bubbles: true,
+        cancelable: true,
+      }));
+    });
+  }
+
+  function readPdfUrlFromQueryString() {
+    try {
+      const search = window.location && window.location.search
+        ? window.location.search
+        : "";
+      if (!search) {
+        return "";
+      }
+
+      const query = new URLSearchParams(search);
+      return normalizeOptionalText(query.get("pdf_url") || query.get("pdfUrl") || "");
+    } catch (_error) {
+      return "";
+    }
+  }
+
+  function sanitizePdfUrlInput(value) {
+    const normalizedValue = normalizeOptionalText(value);
+    if (!normalizedValue) {
+      return {
+        value: "",
+        error: "Enter a PDF URL.",
+      };
+    }
+
+    if (normalizedValue.length > MAX_PDF_URL_LENGTH) {
+      return {
+        value: "",
+        error: `PDF URL is too long (max ${MAX_PDF_URL_LENGTH} characters).`,
+      };
+    }
+
+    const decodedValue = decodeURIComponentSafely(normalizedValue);
+    if (PDF_URL_CONTROL_CHAR_PATTERN.test(decodedValue)) {
+      return {
+        value: "",
+        error: "PDF URL contains control characters and was blocked.",
+      };
+    }
+    if (PDF_URL_XSS_CHAR_PATTERN.test(decodedValue)) {
+      return {
+        value: "",
+        error: "PDF URL contains unsafe characters and was blocked.",
+      };
+    }
+    if (PDF_URL_SQLI_SEQUENCE_PATTERN.test(decodedValue)) {
+      return {
+        value: "",
+        error: "PDF URL contains unsafe SQL-like sequences and was blocked.",
+      };
+    }
+
+    let parsedUrl;
+    try {
+      parsedUrl = new URL(normalizedValue);
+    } catch (_error) {
+      return {
+        value: "",
+        error: "Enter a valid absolute PDF URL using http:// or https://.",
+      };
+    }
+
+    if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
+      return {
+        value: "",
+        error: "PDF URL must start with http:// or https://.",
+      };
+    }
+    if (!normalizeOptionalText(parsedUrl.hostname)) {
+      return {
+        value: "",
+        error: "PDF URL must include a hostname.",
+      };
+    }
+    if (normalizeOptionalText(parsedUrl.username) || normalizeOptionalText(parsedUrl.password)) {
+      return {
+        value: "",
+        error: "PDF URL must not include embedded credentials.",
+      };
+    }
+
+    const sanitizedValue = parsedUrl.toString();
+    if (sanitizedValue.length > MAX_PDF_URL_LENGTH) {
+      return {
+        value: "",
+        error: `PDF URL is too long after normalization (max ${MAX_PDF_URL_LENGTH} characters).`,
+      };
+    }
+
+    return {
+      value: sanitizedValue,
+      error: "",
+    };
+  }
+
+  function decodeURIComponentSafely(value) {
+    const normalizedValue = normalizeOptionalText(value);
+    if (!normalizedValue) {
+      return "";
+    }
+
+    try {
+      return decodeURIComponent(normalizedValue);
+    } catch (_error) {
+      return normalizedValue;
     }
   }
 
@@ -971,10 +1123,12 @@
   }
 
   async function runUrlValidation(validateUrl) {
-    const pdfUrl = pdfUrlInput.value.trim();
-    if (!pdfUrl) {
-      throw new Error("Enter a PDF URL.");
+    const sanitizedPdfUrl = sanitizePdfUrlInput(pdfUrlInput.value);
+    if (!sanitizedPdfUrl.value) {
+      throw new Error(sanitizedPdfUrl.error);
     }
+    const pdfUrl = sanitizedPdfUrl.value;
+    pdfUrlInput.value = pdfUrl;
 
     const url = new URL(validateUrl);
     url.searchParams.set("pdf_url", pdfUrl);
